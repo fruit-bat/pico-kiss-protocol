@@ -17,20 +17,23 @@ void stdout_decoder_start_cb(void * data) {
 }
 
 void stdout_decoder_end_cb(void * data, pico_kiss_proto_decoder_status_t status) {
-    printf("End frame received: %s\n", pico_kiss_proto_decoder_status_to_string(status));
+    printf("End frame received (%s)\n", pico_kiss_proto_decoder_status_to_string(status));
 }
 
 void test_decoder_1() {
+    printf("Test decoder 1: Send the bytes 0xC0, 0x01, 0x02, 0xC0\n");
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 1 complete\n");
 }
 
 // Send the bytes 0xC0, 0xDB out of TNC port 0
 // C0 - FEND	00 - DATA FRAME: port 0	DB - FESC	DC - TFEND	DB - FESC	DD - TFESC	C0 - FEND
 void test_decoder_2() {
+    printf("Test decoder 2: Send the bytes 0xC0, 0xDB out of TNC port 0\n");
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
@@ -42,11 +45,13 @@ void test_decoder_2() {
       PICO_KISS_PROTO_FEND
     };
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 2 complete\n");
 }
 
 // Send the characters "Hello" out of TNC port 5
 // C0 - FEND	50 - DATA FRAME: port 5	48 - "H"	65 - "e"	6C - "l"	6C - "l"	6F -"o"	C0 - FEND
 void test_decoder_3() {
+    printf("Test decoder 3: Send the characters \"Hello\" out of TNC port 5\n");    
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
@@ -57,10 +62,12 @@ void test_decoder_3() {
       PICO_KISS_PROTO_FEND
     };
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 3 complete\n");
 }
 
 // Send the bytes 0xDB, 0xC0, 0xDB  
 void test_decoder_4() {
+    printf("Test decoder 4: Send the bytes 0xDB, 0xC0, 0xDB\n");
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
@@ -72,26 +79,42 @@ void test_decoder_4() {
       PICO_KISS_PROTO_FEND
     };
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 4 complete\n");
 }
 
 // Test send 0xC0 0x01 0x02 0xC0
 void test_decoder_5() {
+    printf("Test decoder 5: Send the bytes 0xC0, 0x01, 0x02, 0xC0\n");
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 5 complete\n");
 }
 
 // Test send FESC FEND
 void test_decoder_6() {
+    printf("Test decoder 6: Send the bytes 0xFESC, 0xFEND\n");
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_FEND};
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 6 complete\n");
 }
+
+// Test send 0xC0 0x01 0xC0 0x02 0xC0
+void test_decoder_7() {
+    printf("Test decoder 7: Send the bytes 0xC0, 0x01, 0xC0, 0x02, 0xC0\n");
+    pico_kiss_proto_decoder_t decoder;
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
+
+    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x01, PICO_KISS_PROTO_FEND, 0x02, PICO_KISS_PROTO_FEND};
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    printf("Test decoder 7 complete\n");
+} 
 
 /**
  */
@@ -103,6 +126,7 @@ int main() {
   test_decoder_4();
   test_decoder_5();
   test_decoder_6();
+  test_decoder_7();
 
   printf("Done\n");
   return 0; 

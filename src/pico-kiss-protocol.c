@@ -68,6 +68,9 @@ void pico_kiss_proto_decoder_put(
             if (decoder->end_cb) {
                 decoder->end_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
             }
+            if (decoder->start_cb) {
+                decoder->start_cb(decoder->data);
+            }
         }
         return;
     }
@@ -85,11 +88,11 @@ void pico_kiss_proto_decoder_put(
 
 void pico_kiss_proto_decoder_put_array(
     pico_kiss_proto_decoder_t* decoder,
-    uint8_t* byte,
+    uint8_t* bytes,
     size_t len
 ) {
     for (size_t i = 0; i < len; i++) {
-        pico_kiss_proto_decoder_put(decoder, byte[i]);
+        pico_kiss_proto_decoder_put(decoder, bytes[i]);
     }
 }
 
@@ -133,20 +136,20 @@ void pico_kiss_proto_encoder_end(
 
 void pico_kiss_proto_encoder_put_array(
     pico_kiss_proto_encoder_t* encoder,
-    uint8_t* byte,
+    uint8_t* bytes,
     size_t len
 ) {
     for (size_t i = 0; i < len; i++) {
-        pico_kiss_proto_encoder_put(encoder, byte[i]);
+        pico_kiss_proto_encoder_put(encoder, bytes[i]);
     }
 }
 
 void pico_kiss_proto_encoder_put_frame(
     pico_kiss_proto_encoder_t* encoder,
-    uint8_t* byte,
+    uint8_t* bytes,
     size_t len
 ) {
     pico_kiss_proto_encoder_start(encoder);
-    pico_kiss_proto_encoder_put_array(encoder, byte, len);
+    pico_kiss_proto_encoder_put_array(encoder, bytes, len);
     pico_kiss_proto_encoder_end(encoder);
 }

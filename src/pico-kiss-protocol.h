@@ -56,7 +56,7 @@ void pico_kiss_proto_decoder_put(
 
 void pico_kiss_proto_decoder_put_array(
     pico_kiss_proto_decoder_t* decoder,
-    uint8_t* byte,
+    uint8_t* bytes,
     size_t len
 );
 
@@ -86,6 +86,19 @@ void pico_kiss_proto_encoder_end(
     pico_kiss_proto_encoder_t* encoder
 );
 
+void pico_kiss_proto_encoder_put_array(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t* bytes,
+    size_t len
+);
+
+void pico_kiss_proto_encoder_put_frame(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t* bytes,
+    size_t len
+);
+
 #ifdef __cplusplus
 }
 #endif  
+ 
