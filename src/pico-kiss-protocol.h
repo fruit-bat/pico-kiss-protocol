@@ -28,15 +28,17 @@ typedef struct {
     uint8_t state;
     uint8_t escape_next_byte;
     void *data;
+    pico_kiss_proto_decoder_frame_cb_t start_cb;
     pico_kiss_proto_decoder_data_cb_t data_cb;
-    pico_kiss_proto_decoder_frame_cb_t frame_cb;
+    pico_kiss_proto_decoder_frame_cb_t end_cb;
 } pico_kiss_proto_decoder_t;
 
 void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_t* decoder,
     void *data,
+    pico_kiss_proto_decoder_frame_cb_t start_cb,
     pico_kiss_proto_decoder_data_cb_t data_cb,
-    pico_kiss_proto_decoder_frame_cb_t frame_cb
+    pico_kiss_proto_decoder_frame_cb_t end_cb
 );
 
 void pico_kiss_proto_decoder_put(

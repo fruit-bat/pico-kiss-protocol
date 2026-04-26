@@ -11,13 +11,18 @@ void stdout_decoder_data_cb(void * data, uint8_t byte) {
     }
     printf("\n");
 }
-void stdout_decoder_frame_cb(void * data) {
-    printf("Frame received\n");
+
+void stdout_decoder_start_cb(void * data) {
+    printf("Start frame received\n");
+}
+
+void stdout_decoder_end_cb(void * data) {
+    printf("End frame received\n");
 }
 
 void test_decoder_1() {
     pico_kiss_proto_decoder_t decoder;
-    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
@@ -27,7 +32,7 @@ void test_decoder_1() {
 // C0 - FEND	00 - DATA FRAME: port 0	DB - FESC	DC - TFEND	DB - FESC	DD - TFESC	C0 - FEND
 void test_decoder_2() {
     pico_kiss_proto_decoder_t decoder;
-    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {
       PICO_KISS_PROTO_FEND, 
@@ -43,7 +48,7 @@ void test_decoder_2() {
 // C0 - FEND	50 - DATA FRAME: port 5	48 - "H"	65 - "e"	6C - "l"	6C - "l"	6F -"o"	C0 - FEND
 void test_decoder_3() {
     pico_kiss_proto_decoder_t decoder;
-    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {
       PICO_KISS_PROTO_FEND, 
@@ -57,7 +62,7 @@ void test_decoder_3() {
 // Send the bytes 0xDB, 0xC0, 0xDB  
 void test_decoder_4() {
     pico_kiss_proto_decoder_t decoder;
-    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
 
     uint8_t test_frame[] = {
       PICO_KISS_PROTO_FEND, 
@@ -69,6 +74,16 @@ void test_decoder_4() {
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
 }
 
+// Test send 0xC0 0x01 0x02 0xC0
+void test_decoder_5() {
+    pico_kiss_proto_decoder_t decoder;
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
+
+    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+}
+
+
 /**
  */
 int main() {
@@ -77,6 +92,8 @@ int main() {
   test_decoder_2();
   test_decoder_3();
   test_decoder_4();
+  test_decoder_5();
+
   printf("Done\n");
   return 0; 
 
