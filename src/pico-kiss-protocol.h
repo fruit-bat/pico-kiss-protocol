@@ -50,6 +50,19 @@ void pico_kiss_proto_decoder_put_array(
     size_t len
 );
 
+typedef void (*pico_kiss_proto_encoder_cb_t)(void * data, uint8_t byte);
+
+typedef struct {
+    void *data;
+    pico_kiss_proto_encoder_cb_t byte_cb;
+} pico_kiss_proto_encoder_t;
+
+void pico_kiss_proto_encoder_init(
+    pico_kiss_proto_encoder_t* encoder,
+    void *data,
+    pico_kiss_proto_encoder_cb_t byte_cb
+);
+
 #ifdef __cplusplus
 }
 #endif  

@@ -62,3 +62,28 @@ void pico_kiss_proto_decoder_put_array(
     }
 }
 
+void pico_kiss_proto_encoder_init(
+    pico_kiss_proto_encoder_t* encoder,
+    void *data,
+    pico_kiss_proto_encoder_cb_t byte_cb
+) {
+    encoder->data = data;
+    encoder->byte_cb = byte_cb;
+}
+
+void pico_kiss_proto_encoder_put(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t byte
+) {
+    if (byte == PICO_KISS_PROTO_FEND) {
+        encoder->byte_cb(encoder->data, PICO_KISS_PROTO_FESC);
+        encoder->byte_cb(encoder->data, PICO_KISS_PROTO_TFEND);
+    } 
+    else if (byte == PICO_KISS_PROTO_FESC) {
+        encoder->byte_cb(encoder->data, PICO_KISS_PROTO_FESC);
+        encoder->byte_cb(encoder->data, PICO_KISS_PROTO_TFESC);
+    }
+    else {
+        encoder->byte_cb(encoder->data, byte);
+    }
+}
