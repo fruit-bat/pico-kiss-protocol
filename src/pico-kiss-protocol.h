@@ -28,13 +28,27 @@ typedef enum {
 
 const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status);
 
-typedef void (*pico_kiss_proto_decoder_data_cb_t)(void * data, uint8_t byte);
-typedef void (*pico_kiss_proto_decoder_start_cb_t)(void * data);
-typedef void (*pico_kiss_proto_decoder_end_cb_t)(void * data, pico_kiss_proto_decoder_status_t status);
+typedef struct {
+    uint32_t len;
+    pico_kiss_proto_decoder_status_t status;
+} pico_kiss_proto_frame_info_t;
+
+typedef void (*pico_kiss_proto_decoder_data_cb_t)(
+    void * data, 
+    uint8_t byte, 
+    uint32_t byte_index);
+
+typedef void (*pico_kiss_proto_decoder_start_cb_t)(
+    void * data);
+
+typedef void (*pico_kiss_proto_decoder_end_cb_t)(
+    void * data, 
+    pico_kiss_proto_frame_info_t* status);
 
 typedef struct {
     uint8_t state;
     uint8_t escape_next_byte;
+    uint32_t data_len;
     void *data;
     pico_kiss_proto_decoder_start_cb_t start_cb;
     pico_kiss_proto_decoder_data_cb_t data_cb;

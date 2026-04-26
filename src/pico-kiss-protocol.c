@@ -11,6 +11,15 @@ const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_sta
     }
 }
 
+static void pico_kiss_proto_decoder_reset(
+    pico_kiss_proto_decoder_t* decoder,
+    uint8_t state
+) {
+    decoder->state = state;
+    decoder->escape_next_byte = 0;
+    decoder->data_len = 0;
+}
+
 void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_t* decoder,
     void *data,
@@ -18,8 +27,7 @@ void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_data_cb_t data_cb,
     pico_kiss_proto_decoder_end_cb_t end_cb
 ) {
-    decoder->state = PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND;
-    decoder->escape_next_byte = 0;
+    pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
     decoder->data = data;
     decoder->start_cb = start_cb;
     decoder->data_cb = data_cb;
@@ -41,10 +49,13 @@ void pico_kiss_proto_decoder_put(
             // Invalid escape sequence, reset decoder
             // End of frame, call frame callback
             if (decoder->end_cb) {
-                decoder->end_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE);
+                pico_kiss_proto_frame_info_t frame_info = {
+                    .len = decoder->data_len,
+                    .status = PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE
+                };
+                decoder->end_cb(decoder->data, &frame_info);
             }
-            decoder->state = PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND;
-            decoder->escape_next_byte = 0;
+            pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
             return;
         }
         decoder->escape_next_byte = 0;
@@ -57,8 +68,7 @@ void pico_kiss_proto_decoder_put(
         decoder->escape_next_byte = 0;
 
         if (decoder->state == PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND) {
-            // Start of frame, next byte will be command
-            decoder->state = PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA;
+            pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA);
             if (decoder->start_cb) {
                 decoder->start_cb(decoder->data);
             }
@@ -66,8 +76,13 @@ void pico_kiss_proto_decoder_put(
         else {
             // End of frame, call frame callback
             if (decoder->end_cb) {
-                decoder->end_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+                pico_kiss_proto_frame_info_t frame_info = {
+                    .len = decoder->data_len,
+                    .status = PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE
+                };
+                decoder->end_cb(decoder->data, &frame_info);
             }
+            pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA);
             if (decoder->start_cb) {
                 decoder->start_cb(decoder->data);
             }
@@ -80,10 +95,12 @@ void pico_kiss_proto_decoder_put(
         return;
     }
 
-    // We have a data byte, pass it to the callback
+    // We have a data byte, pass it to the callback  
     if (decoder->data_cb) {
-        decoder->data_cb(decoder->data, byte);
+        decoder->data_cb(decoder->data, byte, decoder->data_len);
     }
+
+    decoder->data_len++;
 }
 
 void pico_kiss_proto_decoder_put_array(

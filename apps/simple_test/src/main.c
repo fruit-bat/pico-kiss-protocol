@@ -4,8 +4,8 @@
 
 // cc -Isrc src/pico-kiss-protocol.c apps/simple_test/src/main.c 
 
-void stdout_decoder_data_cb(void * data, uint8_t byte) {
-    printf("Data: 0x%02X", byte);
+void stdout_decoder_data_cb(void * data, uint8_t byte, uint32_t byte_index) {
+    printf("Data [%lu]: 0x%02X ", (unsigned long)byte_index, byte );
     if (isprint(byte)) {
         printf(" '%c'", byte);
     }
@@ -16,8 +16,14 @@ void stdout_decoder_start_cb(void * data) {
     printf("Start frame received\n");
 }
 
-void stdout_decoder_end_cb(void * data, pico_kiss_proto_decoder_status_t status) {
-    printf("End frame received (%s)\n", pico_kiss_proto_decoder_status_to_string(status));
+void stdout_decoder_end_cb(
+  void * data,
+  pico_kiss_proto_frame_info_t* frame_info
+) {
+    printf(
+      "End frame received (%s), length: %lu\n", 
+      pico_kiss_proto_decoder_status_to_string(frame_info->status), 
+      (unsigned long)frame_info->len  );
 }
 
 void test_decoder_1() {
