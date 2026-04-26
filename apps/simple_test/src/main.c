@@ -32,12 +32,23 @@ void test_decoder_2() {
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
 }
 
+// Send the characters "Hello" out of TNC port 5
+// C0 - FEND	50 - DATA FRAME: port 5	48 - "H"	65 - "e"	6C - "l"	6C - "l"	6F -"o"	C0 - FEND
+void test_decoder_3() {
+    pico_kiss_proto_decoder_t decoder;
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+
+    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x50, 0x48, 0x65, 0x6C, 0x6C, 0x6F, PICO_KISS_PROTO_FEND};
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+}
+
 /**
  */
 int main() {
   printf("Startup\n");
   test_decoder_1();
   test_decoder_2();
+  test_decoder_3();
   printf("Done\n");
   return 0; 
 
