@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "pico-kiss-protocol.h"
 
+// cc -Isrc src/pico-kiss-protocol.c apps/simple_test/src/main.c 
 
 void stdout_decoder_data_cb(void * data, uint8_t byte) {
     printf("Data: 0x%02X", byte);
@@ -28,7 +29,13 @@ void test_decoder_2() {
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
 
-    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x00, PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFEND, PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFESC, PICO_KISS_PROTO_FEND};
+    uint8_t test_frame[] = {
+      PICO_KISS_PROTO_FEND, 
+      0x00, 
+      PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFEND, 
+      PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFESC, 
+      PICO_KISS_PROTO_FEND
+    };
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
 }
 
@@ -38,7 +45,27 @@ void test_decoder_3() {
     pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
 
-    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, 0x50, 0x48, 0x65, 0x6C, 0x6C, 0x6F, PICO_KISS_PROTO_FEND};
+    uint8_t test_frame[] = {
+      PICO_KISS_PROTO_FEND, 
+      0x50, 
+      0x48, 0x65, 0x6C, 0x6C, 0x6F, 
+      PICO_KISS_PROTO_FEND
+    };
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+}
+
+// Send the bytes 0xDB, 0xC0, 0xDB  
+void test_decoder_4() {
+    pico_kiss_proto_decoder_t decoder;
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_data_cb, stdout_decoder_frame_cb);
+
+    uint8_t test_frame[] = {
+      PICO_KISS_PROTO_FEND, 
+      PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFESC, 
+      PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFEND, 
+      PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_TFESC, 
+      PICO_KISS_PROTO_FEND
+    };
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
 }
 
@@ -49,6 +76,7 @@ int main() {
   test_decoder_1();
   test_decoder_2();
   test_decoder_3();
+  test_decoder_4();
   printf("Done\n");
   return 0; 
 
