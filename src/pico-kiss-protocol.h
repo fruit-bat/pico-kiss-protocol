@@ -73,6 +73,19 @@ void pico_kiss_proto_encoder_init(
     pico_kiss_proto_encoder_cb_t byte_cb
 );
 
+void pico_kiss_proto_encoder_start(
+    pico_kiss_proto_encoder_t* encoder
+);
+
+void pico_kiss_proto_encoder_put(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t byte
+);
+
+void pico_kiss_proto_encoder_end(
+    pico_kiss_proto_encoder_t* encoder
+);
+
 #ifdef __cplusplus
 }
 #endif  

@@ -102,6 +102,12 @@ void pico_kiss_proto_encoder_init(
     encoder->byte_cb = byte_cb;
 }
 
+void pico_kiss_proto_encoder_start(
+    pico_kiss_proto_encoder_t* encoder
+) {
+    encoder->byte_cb(encoder->data, PICO_KISS_PROTO_FEND);
+}
+
 void pico_kiss_proto_encoder_put(
     pico_kiss_proto_encoder_t* encoder,
     uint8_t byte
@@ -117,4 +123,30 @@ void pico_kiss_proto_encoder_put(
     else {
         encoder->byte_cb(encoder->data, byte);
     }
+}
+
+void pico_kiss_proto_encoder_end(
+    pico_kiss_proto_encoder_t* encoder
+) {
+    encoder->byte_cb(encoder->data, PICO_KISS_PROTO_FEND);
+}
+
+void pico_kiss_proto_encoder_put_array(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t* byte,
+    size_t len
+) {
+    for (size_t i = 0; i < len; i++) {
+        pico_kiss_proto_encoder_put(encoder, byte[i]);
+    }
+}
+
+void pico_kiss_proto_encoder_put_frame(
+    pico_kiss_proto_encoder_t* encoder,
+    uint8_t* byte,
+    size_t len
+) {
+    pico_kiss_proto_encoder_start(encoder);
+    pico_kiss_proto_encoder_put_array(encoder, byte, len);
+    pico_kiss_proto_encoder_end(encoder);
 }
