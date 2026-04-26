@@ -21,24 +21,32 @@ extern "C" {
 #define PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND  PICO_KISS_PROTO_BYTE(0)
 #define PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA    PICO_KISS_PROTO_BYTE(1)
 
+typedef enum {
+    PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE = 0,
+    PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE = 1,
+} pico_kiss_proto_decoder_status_t;
+
+const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status);
+
 typedef void (*pico_kiss_proto_decoder_data_cb_t)(void * data, uint8_t byte);
-typedef void (*pico_kiss_proto_decoder_frame_cb_t)(void * data);
+typedef void (*pico_kiss_proto_decoder_start_cb_t)(void * data);
+typedef void (*pico_kiss_proto_decoder_end_cb_t)(void * data, pico_kiss_proto_decoder_status_t status);
 
 typedef struct {
     uint8_t state;
     uint8_t escape_next_byte;
     void *data;
-    pico_kiss_proto_decoder_frame_cb_t start_cb;
+    pico_kiss_proto_decoder_start_cb_t start_cb;
     pico_kiss_proto_decoder_data_cb_t data_cb;
-    pico_kiss_proto_decoder_frame_cb_t end_cb;
+    pico_kiss_proto_decoder_end_cb_t end_cb;
 } pico_kiss_proto_decoder_t;
 
 void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_t* decoder,
     void *data,
-    pico_kiss_proto_decoder_frame_cb_t start_cb,
+    pico_kiss_proto_decoder_start_cb_t start_cb,
     pico_kiss_proto_decoder_data_cb_t data_cb,
-    pico_kiss_proto_decoder_frame_cb_t end_cb
+    pico_kiss_proto_decoder_end_cb_t end_cb
 );
 
 void pico_kiss_proto_decoder_put(

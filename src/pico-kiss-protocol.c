@@ -1,11 +1,22 @@
 #include "pico-kiss-protocol.h"
 
+const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status) {
+    switch (status) {
+        case PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE:
+            return "Frame Complete";
+        case PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE:
+            return "Invalid Escape Sequence";
+        default:
+            return "Unknown Status";
+    }
+}
+
 void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_t* decoder,
     void *data,
-    pico_kiss_proto_decoder_frame_cb_t start_cb,
+    pico_kiss_proto_decoder_start_cb_t start_cb,
     pico_kiss_proto_decoder_data_cb_t data_cb,
-    pico_kiss_proto_decoder_frame_cb_t end_cb
+    pico_kiss_proto_decoder_end_cb_t end_cb
 ) {
     decoder->state = PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND;
     decoder->escape_next_byte = 0;
@@ -26,13 +37,25 @@ void pico_kiss_proto_decoder_put(
         else if (byte == PICO_KISS_PROTO_TFESC) {
             byte = PICO_KISS_PROTO_FESC;
         }
+        else {
+            // Invalid escape sequence, reset decoder
+            // End of frame, call frame callback
+            if (decoder->end_cb) {
+                decoder->end_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE);
+            }
+            decoder->state = PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND;
+            decoder->escape_next_byte = 0;
+            return;
+        }
         decoder->escape_next_byte = 0;
-    } 
+    }
     else if (byte == PICO_KISS_PROTO_FESC) {
         decoder->escape_next_byte = 1;
         return;
     }
     else if (byte == PICO_KISS_PROTO_FEND) {
+        decoder->escape_next_byte = 0;
+
         if (decoder->state == PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND) {
             // Start of frame, next byte will be command
             decoder->state = PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA;
@@ -43,7 +66,7 @@ void pico_kiss_proto_decoder_put(
         else {
             // End of frame, call frame callback
             if (decoder->end_cb) {
-                decoder->end_cb(decoder->data);
+                decoder->end_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
             }
         }
         return;

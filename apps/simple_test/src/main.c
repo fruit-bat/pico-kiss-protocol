@@ -16,8 +16,8 @@ void stdout_decoder_start_cb(void * data) {
     printf("Start frame received\n");
 }
 
-void stdout_decoder_end_cb(void * data) {
-    printf("End frame received\n");
+void stdout_decoder_end_cb(void * data, pico_kiss_proto_decoder_status_t status) {
+    printf("End frame received: %s\n", pico_kiss_proto_decoder_status_to_string(status));
 }
 
 void test_decoder_1() {
@@ -83,6 +83,15 @@ void test_decoder_5() {
     pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
 }
 
+// Test send FESC FEND
+void test_decoder_6() {
+    pico_kiss_proto_decoder_t decoder;
+    pico_kiss_proto_decoder_init(&decoder, NULL, stdout_decoder_start_cb, stdout_decoder_data_cb, stdout_decoder_end_cb);
+
+    uint8_t test_frame[] = {PICO_KISS_PROTO_FEND, PICO_KISS_PROTO_FESC, PICO_KISS_PROTO_FEND};
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+    pico_kiss_proto_decoder_put_array(&decoder, test_frame, sizeof(test_frame));
+}
 
 /**
  */
@@ -93,6 +102,7 @@ int main() {
   test_decoder_3();
   test_decoder_4();
   test_decoder_5();
+  test_decoder_6();
 
   printf("Done\n");
   return 0; 
