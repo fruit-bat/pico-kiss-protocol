@@ -20,3 +20,17 @@ Just some help encoding and decoding kiss frames
 https://en.wikipedia.org/wiki/KISS_(amateur_radio_protocol)<br/>
 https://en.wikipedia.org/wiki/Terminal_node_controller<br/>
 
+## Host unit tests
+A simple host test target is available under `tests/`.
+
+Build and run from the repository root:
+
+```bash
+cd tests
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
+```
+
+This compiles `pico-kiss-protocol` as a normal host executable and runs the unit tests without Pico hardware.
+
