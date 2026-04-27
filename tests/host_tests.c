@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "pico-kiss-protocol.h"
+#include "pico-kiss-protocol-codes.h"
 
 typedef struct {
     uint8_t data[256];

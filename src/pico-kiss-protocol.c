@@ -1,4 +1,8 @@
 #include "pico-kiss-protocol.h"
+#include "pico-kiss-protocol-codes.h"
+
+#define PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND  PICO_KISS_PROTO_BYTE(0)
+#define PICO_KISS_PROTO_DECODER_STATE_RECEIVING_DATA    PICO_KISS_PROTO_BYTE(1)
 
 const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status) {
     switch (status) {
