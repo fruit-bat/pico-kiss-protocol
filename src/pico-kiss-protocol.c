@@ -36,6 +36,14 @@ void pico_kiss_proto_decoder_init(
     decoder->start_cb = start_cb;
     decoder->data_cb = data_cb;
     decoder->end_cb = end_cb;
+    decoder->flags = 0;
+}
+
+void pico_kiss_proto_decoder_set_flags(
+    pico_kiss_proto_decoder_t* decoder,
+    pico_kiss_proto_decoder_flags_t flags
+) {
+    decoder->flags = flags;
 }
 
 void pico_kiss_proto_decoder_put(
@@ -51,17 +59,32 @@ void pico_kiss_proto_decoder_put(
         }
         else {
             // Invalid escape sequence, reset decoder
-            // End of frame, call frame callback
-            if (decoder->end_cb) {
-                pico_kiss_proto_frame_info_t frame_info = {
-                    .len = decoder->data_len,
-                    .status = PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE
-                };
-                decoder->end_cb(decoder->data, &frame_info);
+            if (decoder->flags & STRICT_ECAPE_SEQUENCES) {
+                // If strict mode is enabled, treat this as an error
+                if (decoder->end_cb) {
+                    pico_kiss_proto_frame_info_t frame_info = {
+                        .len = decoder->data_len,
+                        .status = PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE
+                    };
+                    decoder->end_cb(decoder->data, &frame_info);
+                }
+                // End of frame, call frame callback
+                pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
+                return;
             }
-            pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
-            return;
+            else {
+                // If strict mode is not enabled, treat this as a literal byte
+                // (This is a leniency that can help with some malformed frames)
+                if (decoder->data_cb) {
+                    decoder->data_cb(decoder->data, PICO_KISS_PROTO_FESC, decoder->data_len);
+                }
+                decoder->data_len++;
+            }
+            decoder->escape_next_byte = 0;
         }
+    }
+
+    if (decoder->escape_next_byte) {
         decoder->escape_next_byte = 0;
     }
     else if (byte == PICO_KISS_PROTO_FESC) {

@@ -31,10 +31,15 @@ typedef void (*pico_kiss_proto_decoder_end_cb_t)(
     void * data, 
     pico_kiss_proto_frame_info_t* status);
 
+typedef enum {    
+    STRICT_ECAPE_SEQUENCES = (1 << 0)
+} pico_kiss_proto_decoder_flags_t;  
+
 typedef struct {
     uint8_t state;
     uint8_t escape_next_byte;
     uint32_t data_len;
+    pico_kiss_proto_decoder_flags_t flags;
     void *data;
     pico_kiss_proto_decoder_start_cb_t start_cb;
     pico_kiss_proto_decoder_data_cb_t data_cb;
@@ -47,6 +52,11 @@ void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_start_cb_t start_cb,
     pico_kiss_proto_decoder_data_cb_t data_cb,
     pico_kiss_proto_decoder_end_cb_t end_cb
+);
+
+void pico_kiss_proto_decoder_set_flags(
+    pico_kiss_proto_decoder_t* decoder,
+    pico_kiss_proto_decoder_flags_t flags
 );
 
 void pico_kiss_proto_decoder_put(

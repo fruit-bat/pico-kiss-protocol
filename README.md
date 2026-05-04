@@ -28,8 +28,7 @@ Build and run from the repository root:
 ```bash
 cd tests
 cmake -S . -B build
-cmake --build build
-ctest --test-dir build
+cmake --build build && ctest --verbose --test-dir build
 ```
 
 This compiles `pico-kiss-protocol` as a normal host executable and runs the unit tests without Pico hardware.
