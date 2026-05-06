@@ -392,8 +392,8 @@ static void test_invalid_escape(void) {
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0x99, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
-        fprintf(stderr, "L Started: %d, Ended: %d, Status: %d, Frame Len: %ld, Frame Num: %d\n", 
-            capture.started, capture.ended, capture.status, capture.frame_len, capture.frame_num);
+        // fprintf(stderr, "L Started: %d, Ended: %d, Status: %d, Frame Len: %ld, Frame Num: %d\n", 
+        //     capture.started, capture.ended, capture.status, capture.frame_len, capture.frame_num);
 
     assert(capture.started == 1);
     assert(capture.ended == 1);
@@ -404,6 +404,166 @@ static void test_invalid_escape(void) {
     assert(capture.frame_data[2] == 0x99);
 }
 
+// 9. FEND inside frame without escaping (malformed)
+// Input
+// C0 00 11 C0 22 C0
+// Expected
+// Two frames:
+// Frame 1:
+// cmd=0x00
+// data={0x11}
+// Frame 2:
+// cmd=0x22   // this becomes command byte
+// data={}
+static void test_fend_inside_frame_without_escaping_capture_end(void *data, pico_kiss_proto_frame_info_t *info) {
+    capture_end(data, info);
+    decoder_capture_t *capture = data;
+    //fprintf(stderr, "KK Frame 2: Len=%ld, Data[0]=%02X\n", capture->frame_len, capture->frame_data[0]);
+
+    assert(capture->started == 1);
+    assert(capture->ended == 1);
+    assert(capture->status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+
+    switch(capture->frame_num) {
+        case 1:
+            assert(capture->frame_len == 2);
+            assert(capture->frame_data[0] == 0x00);
+            assert(capture->frame_data[1] == 0x11);
+            break;
+        case 2:
+            assert(capture->frame_len == 1);
+            assert(capture->frame_data[0] == 0x22);
+            break;
+        default:
+            assert(0 && "Unexpected frame number");
+            break;
+    }   
+}
+static void test_fend_inside_frame_without_escaping(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        test_fend_inside_frame_without_escaping_capture_end
+    );
+
+    // C0 00 11 C0 22 C0
+    const uint8_t frame[] = {0xC0, 0x00, 0x11, 0xC0, 0x22, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.frame_num == 2);
+}
+
+// 10. Noise before first FEND
+// Input
+// 11 22 33 C0 00 44 C0
+// Expected
+// Ignore noise:
+// cmd=0x00
+// data={0x44}
+static void test_noise_before_first_fend(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+
+    const uint8_t frame[] = {0x11, 0x22, 0x33, 0xC0, 0x00, 0x44, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 2);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0x44);
+}
+
+// 11. Double FEND (frame boundary edge)
+// Input
+// C0 C0 00 55 C0
+// Expected
+// Ignore empty frame or emit it depending on design:
+// Option A (recommended: ignore empty leading frame)
+// cmd=0x00
+// data={0x55}
+// Option B (strict)
+// Frame 1: empty
+// Frame 2: cmd=0x00, data={0x55}
+static void test_double_fend_capture_end(void *data, pico_kiss_proto_frame_info_t *info) {
+    capture_end(data, info);
+    decoder_capture_t *capture = data;
+    //fprintf(stderr, "KK Frame 2: Len=%ld, Data[0]=%02X\n", capture->frame_len, capture->frame_data[0]);
+
+    assert(capture->started == 1);
+    assert(capture->ended == 1);
+    assert(capture->status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+
+    switch(capture->frame_num) {
+        case 1:
+            assert(capture->frame_len == 0);
+            break;
+        case 2:
+            assert(capture->frame_len == 2);
+            assert(capture->frame_data[0] == 0x00);
+            assert(capture->frame_data[1] == 0x55);
+            break;
+        default:
+            assert(0 && "Unexpected frame number");
+            break;
+    }   
+}
+static void test_double_fend(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        test_double_fend_capture_end
+    );
+
+    // C0 C0 00 55 C0
+    const uint8_t frame[] = {0xC0, 0xC0, 0x00, 0x55, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.frame_num == 2);
+}
+
+// 12. Unterminated frame (stream ends)
+// Input
+// C0 00 11 22
+// Expected
+// NO FRAME YET
+// Then when next byte arrives:
+// C0
+// → emit:
+// cmd=0x00
+// data={0x11,0x22}
+static void test_unterminated_frame(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+
+    const uint8_t frame[] = {0xC0, 0x00, 0x11, 0x22};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 0);
+    
+    const uint8_t frame_end[] = {0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame_end, sizeof(frame_end));
+    
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 3);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0x11);
+    assert(capture.frame_data[2] == 0x22);
+}
 
 static void run_test(const char *name, void (*fn)(void)) {
     printf("[ RUN ] %s\n", name);
@@ -427,6 +587,11 @@ int main(void) {
     run_test("test_mixed_escaping", test_mixed_escaping);
     run_test("test_across_buffer_escaping", test_across_buffer_escaping);
     run_test("test_invalid_escape", test_invalid_escape);
+    run_test("test_fend_inside_frame_without_escaping", test_fend_inside_frame_without_escaping);
+    run_test("test_noise_before_first_fend", test_noise_before_first_fend);
+    run_test("test_double_fend", test_double_fend);
+    run_test("test_unterminated_frame", test_unterminated_frame);
+    run_test("test_fend_inside_frame_without_escaping", test_fend_inside_frame_without_escaping);
 
     printf("All tests passed.\n");
     return 0;

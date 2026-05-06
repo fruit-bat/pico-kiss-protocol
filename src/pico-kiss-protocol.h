@@ -10,6 +10,7 @@ extern "C" {
 typedef enum {
     PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE = 0,
     PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE = 1,
+    PICO_KISS_PROTO_DECODER_STATUS_FRAME_INCOMPLETE = 2,
 } pico_kiss_proto_decoder_status_t;
 
 const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status);
