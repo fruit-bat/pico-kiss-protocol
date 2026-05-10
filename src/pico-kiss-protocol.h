@@ -59,7 +59,7 @@ typedef void (*pico_kiss_proto_decoder_error_cb_t)(
     uint32_t index);
 
 typedef enum {    
-    STRICT_ECAPE_SEQUENCES = (1 << 0)
+    STRICT_ESCAPE_SEQUENCES = (1 << 0)
 } pico_kiss_proto_decoder_flags_t;  
 
 typedef struct {

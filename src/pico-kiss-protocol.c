@@ -67,7 +67,7 @@ void pico_kiss_proto_decoder_put(
                 decoder->error_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE, decoder->data_len);
             }
 
-            if (decoder->flags & STRICT_ECAPE_SEQUENCES) {
+            if (decoder->flags & STRICT_ESCAPE_SEQUENCES) {
                 // If strict mode is enabled, treat this as an error
                 if (decoder->end_cb) {
                     pico_kiss_proto_frame_info_t frame_info = {

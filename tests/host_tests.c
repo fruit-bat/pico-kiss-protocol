@@ -128,7 +128,7 @@ static void test_decoder_invalid_escape(void) {
     error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
     pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
-    pico_kiss_proto_decoder_set_flags(&decoder, STRICT_ECAPE_SEQUENCES);
+    pico_kiss_proto_decoder_set_flags(&decoder, STRICT_ESCAPE_SEQUENCES);
     const uint8_t frame[] = {PICO_KISS_PROTO_FEND, PICO_KISS_PROTO_FESC, 0x00};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
@@ -934,7 +934,7 @@ int main(void) {
     run_test("test_escaped_escape_followed_by_invalid_escape", test_escaped_escape_followed_by_invalid_escape);
     run_test("test_frame_overflow_recovery", test_frame_overflow_recovery);
     run_test("test_frame_overflow_with_escapes", test_frame_overflow_with_escapes);
-    
+
     printf("All tests passed.\n");
     return 0;
 }
