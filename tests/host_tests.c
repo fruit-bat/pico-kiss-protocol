@@ -852,6 +852,54 @@ static void test_frame_overflow_recovery(void) {
     assert(error_callback_count == 1); // One error for the overflow
 }
 
+// Test Frame Overflow followed by escapes
+// C0 00 01 02 03 04 05 DB DC DB DD 99 C0 11 C0
+//
+// With max size 5.
+//
+// Expected:
+//
+// overflow error once
+// discard entire damaged frame INCLUDING escape sequences
+// recover cleanly
+//
+// next frame:
+// cmd=0x11
+// data={}
+//
+// This verifies:
+//
+// discard mode ignores ALL protocol semantics except FEND
+void test_frame_overflow_with_escapes(void) {
+    decoder_capture_t capture = {0};
+    error_callback_count = 0;
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data_5, 
+        capture_end, 
+        test_decoder_error_callback
+    );
+
+    const uint8_t frame[] = {
+        0xC0, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0xDB, 0xDC, 0xDB, 0xDD, 0x99,
+        0xC0, // End of first frame (overflow)
+        0x11,
+        0xC0
+    };
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 1);
+    assert(capture.frame_data[0] == 0x11);
+    assert(error_callback_count == 1); // One error for the overflow
+}
+
+
 static void run_test(const char *name, void (*fn)(void)) {
     printf("[ RUN ] %s\n", name);
     fn();
@@ -885,7 +933,8 @@ int main(void) {
     run_test("test_multiple_invalid_escapes", test_multiple_invalid_escapes);
     run_test("test_escaped_escape_followed_by_invalid_escape", test_escaped_escape_followed_by_invalid_escape);
     run_test("test_frame_overflow_recovery", test_frame_overflow_recovery);
-
+    run_test("test_frame_overflow_with_escapes", test_frame_overflow_with_escapes);
+    
     printf("All tests passed.\n");
     return 0;
 }
