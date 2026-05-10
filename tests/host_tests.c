@@ -737,6 +737,75 @@ static void test_escape_immediately_before_fend(void) {
     assert(error_callback_count == 1);
 }
 
+// 16. Multiple invalid escapes
+// Input
+// C0 00 DB 11 DB 22 C0
+// Expected
+// data={0x00, 0xDB, 0x11, 0xDB, 0x22}
+// Errors
+// 2
+static void test_multiple_invalid_escapes(void) {
+    decoder_capture_t capture = {0};
+    error_callback_count = 0;
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
+
+    const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0x11, 0xDB, 0x22, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 5);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0xDB);
+    assert(capture.frame_data[2] == 0x11);
+    assert(capture.frame_data[3] == 0xDB);
+    assert(capture.frame_data[4] == 0x22);
+    assert(error_callback_count == 2);
+}
+
+// 17. Escaped escape followed by invalid escape
+// Input
+// C0 00 DB DD DB 99 C0
+// Expected
+// data={0x00, 0xDB, 0xDB, 0x99}
+// Errors
+// 1
+static void test_escaped_escape_followed_by_invalid_escape(void) {
+    decoder_capture_t capture = {0};
+    error_callback_count = 0;
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
+
+    const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xDD, 0xDB, 0x99, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 4);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0xDB);
+    assert(capture.frame_data[2] == 0xDB);
+    assert(capture.frame_data[3] == 0x99);
+    assert(error_callback_count == 1);
+}
+
+// 18. Frame overflow recovery
+// Very important eventually.
+// If buffer fills:
+//  C0 ... huge payload ... C0
+// You want:
+// overflow error
+// discard frame
+// recover cleanly at next FEND
+// NOT:
+// decoder permanently poisoned
+
+// TODO: implement this test once overflow handling is implemented.
+
+
 static void run_test(const char *name, void (*fn)(void)) {
     printf("[ RUN ] %s\n", name);
     fn();
@@ -767,6 +836,9 @@ int main(void) {
     run_test("test_command_only_frame_with_escaping", test_command_only_frame_with_escaping);
     run_test("test_large_payload_with_multiple_escapes", test_large_payload_with_multiple_escapes);
     run_test("test_escape_immediately_before_fend", test_escape_immediately_before_fend);
+    run_test("test_multiple_invalid_escapes", test_multiple_invalid_escapes);
+    run_test("test_escaped_escape_followed_by_invalid_escape", test_escaped_escape_followed_by_invalid_escape);
+
 
     printf("All tests passed.\n");
     return 0;

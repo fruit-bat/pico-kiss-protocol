@@ -9,6 +9,17 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
+/*
+ * If an invalid escape sequence is encountered:
+ *
+ * - the pending escape byte (FESC) is emitted literally
+ * - the invalid byte is reprocessed normally
+ * - if the invalid byte is FEND, it terminates the frame
+ * - an error callback is generated
+ *
+ * This guarantees stream resynchronisation.
+ */
+
 typedef enum {
     PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE = 0,
     PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE = 1,
