@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 fruit-bat
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -102,7 +104,7 @@ static void test_encoder_escape(void) {
 
 static void test_decoder_simple(void) {
     decoder_capture_t capture = {0};
-    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_t decoder;
     pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
 
     const uint8_t frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
@@ -565,6 +567,77 @@ static void test_unterminated_frame(void) {
     assert(capture.frame_data[2] == 0x22);
 }
 
+// 13. Very important: command-only frame with escaping after
+// Input
+// C0 05 DB DC C0
+// Expected
+// cmd=0x05
+// data={0xC0}
+static void test_command_only_frame_with_escaping(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+
+    const uint8_t frame[] = {0xC0, 0x05, 0xDB, 0xDC, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 2);
+    assert(capture.frame_data[0] == 0x05);
+    assert(capture.frame_data[1] == 0xC0);
+}
+
+// 14. Large payload with multiple escapes
+// Input
+// C0 00 DB DC DB DD DB DC DB DD C0
+// Expected
+// data={0xC0,0xDB,0xC0,0xDB}
+static void test_large_payload_with_multiple_escapes(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+
+    const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xDC, 0xDB, 0xDD, 0xDB, 0xDC, 0xDB, 0xDD, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 5);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0xC0);
+    assert(capture.frame_data[2] == 0xDB);
+    assert(capture.frame_data[3] == 0xC0);
+    assert(capture.frame_data[4] == 0xDB);
+}
+
+// 15. Escape immediately before FEND (edge ambiguity)
+// Input
+// C0 00 DB C0
+// Interpretation:
+// DB starts escape
+// next byte is C0 (invalid escape)
+// Recommended expected:
+// data={0xDB}
+// and treat C0 as frame end.
+static void test_escape_immediately_before_fend(void) {
+    decoder_capture_t capture = {0};
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+
+    const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xC0};
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
+
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 2);
+    assert(capture.frame_data[0] == 0x00);
+    assert(capture.frame_data[1] == 0xDB);
+}
+
 static void run_test(const char *name, void (*fn)(void)) {
     printf("[ RUN ] %s\n", name);
     fn();
@@ -592,7 +665,10 @@ int main(void) {
     run_test("test_double_fend", test_double_fend);
     run_test("test_unterminated_frame", test_unterminated_frame);
     run_test("test_fend_inside_frame_without_escaping", test_fend_inside_frame_without_escaping);
-
+    run_test("test_command_only_frame_with_escaping", test_command_only_frame_with_escaping);
+    run_test("test_large_payload_with_multiple_escapes", test_large_payload_with_multiple_escapes);
+    run_test("test_escape_immediately_before_fend", test_escape_immediately_before_fend);
+    
     printf("All tests passed.\n");
     return 0;
 }

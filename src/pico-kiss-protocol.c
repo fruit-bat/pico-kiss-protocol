@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 fruit-bat
 #include "pico-kiss-protocol.h"
 #include "pico-kiss-protocol-codes.h"
 
