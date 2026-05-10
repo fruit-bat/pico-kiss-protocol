@@ -31,13 +31,15 @@ void pico_kiss_proto_decoder_init(
     void *data,
     pico_kiss_proto_decoder_start_cb_t start_cb,
     pico_kiss_proto_decoder_data_cb_t data_cb,
-    pico_kiss_proto_decoder_end_cb_t end_cb
+    pico_kiss_proto_decoder_end_cb_t end_cb,
+    pico_kiss_proto_decoder_error_cb_t error_cb
 ) {
     pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
     decoder->data = data;
     decoder->start_cb = start_cb;
     decoder->data_cb = data_cb;
     decoder->end_cb = end_cb;
+    decoder->error_cb = error_cb;
     decoder->flags = 0;
 }
 
@@ -60,7 +62,11 @@ void pico_kiss_proto_decoder_put(
             byte = PICO_KISS_PROTO_FESC;
         }
         else {
-            // Invalid escape sequence, reset decoder
+            // Invalid escape sequence
+            if (decoder->error_cb) {
+                decoder->error_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE, decoder->data_len);
+            }
+
             if (decoder->flags & STRICT_ECAPE_SEQUENCES) {
                 // If strict mode is enabled, treat this as an error
                 if (decoder->end_cb) {

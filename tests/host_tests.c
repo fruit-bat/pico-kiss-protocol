@@ -105,7 +105,7 @@ static void test_encoder_escape(void) {
 static void test_decoder_simple(void) {
     decoder_capture_t capture = {0};
     pico_kiss_proto_decoder_t decoder;
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, NULL);
 
     const uint8_t frame[] = {PICO_KISS_PROTO_FEND, 0x01, 0x02, PICO_KISS_PROTO_FEND};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -118,10 +118,15 @@ static void test_decoder_simple(void) {
     assert(capture.frame_data[1] == 0x02);
 }
 
+static int error_callback_count = 0;
+static void test_decoder_error_callback(void *data, pico_kiss_proto_decoder_status_t status, uint32_t index) {
+    error_callback_count++;
+}
 static void test_decoder_invalid_escape(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
     pico_kiss_proto_decoder_set_flags(&decoder, STRICT_ECAPE_SEQUENCES);
     const uint8_t frame[] = {PICO_KISS_PROTO_FEND, PICO_KISS_PROTO_FESC, 0x00};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -130,6 +135,7 @@ static void test_decoder_invalid_escape(void) {
     assert(capture.ended == 1);
     assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE);
     assert(capture.frame_len == 0);
+    assert(error_callback_count == 1);
 }
 
 static void test_roundtrip(void) {
@@ -143,8 +149,16 @@ static void test_roundtrip(void) {
     pico_kiss_proto_encoder_put_frame(&encoder, (uint8_t *)payload, sizeof(payload));
 
     decoder_capture_t decode_capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &decode_capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &decode_capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback);
+
     pico_kiss_proto_decoder_put_array(&decoder, actual, capture.len);
 
     assert(decode_capture.started == 1);
@@ -152,12 +166,8 @@ static void test_roundtrip(void) {
     assert(decode_capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
     assert(decode_capture.frame_len == sizeof(payload));
     assert_equal_bytes(decode_capture.frame_data, payload, sizeof(payload));
+    assert(error_callback_count == 0);
 }
-
-
-
-
-
 
 // 1. Basic single frame
 // Input
@@ -168,8 +178,15 @@ static void test_roundtrip(void) {
 // length  = 3
 static void test_basic_single_frame(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x00, 0x01, 0x02, 0x03, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -183,6 +200,8 @@ static void test_basic_single_frame(void) {
     assert(capture.frame_data[1] == 0x01);
     assert(capture.frame_data[2] == 0x02);
     assert(capture.frame_data[3] == 0x03);
+
+    assert(error_callback_count == 0);
 }
 
 // 2. Empty frame (valid and important)
@@ -194,8 +213,15 @@ static void test_basic_single_frame(void) {
 // length  = 0
 static void test_empty_frame(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x00, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -205,6 +231,7 @@ static void test_empty_frame(void) {
     assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
     assert(capture.frame_len == 1);
     assert(capture.frame_data[0] == 0x00);
+    assert(error_callback_count == 0);
 }
 
 // 2.1. Empty frame (valid and important)
@@ -216,8 +243,15 @@ static void test_empty_frame(void) {
 // length  = 0
 static void test_empty_frame_2(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -226,6 +260,7 @@ static void test_empty_frame_2(void) {
     assert(capture.ended == 1);
     assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
     assert(capture.frame_len == 0);
+    assert(error_callback_count == 0);
 }
 
 // 3. Multiple frames back-to-back
@@ -265,19 +300,22 @@ static void test_multiple_frames_capture_end(void *data, pico_kiss_proto_frame_i
 }
 static void test_multiple_frames(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
     pico_kiss_proto_decoder_init(
         &decoder, 
         &capture, 
         capture_start, 
-        capture_data, 
-        test_multiple_frames_capture_end
+        capture_data,
+        test_multiple_frames_capture_end,
+        test_decoder_error_callback
     );
 
     const uint8_t frame[] = {0xC0, 0x00, 0x01, 0xC0, 0xC0, 0x01, 0x02, 0x03, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
     assert(capture.frame_num == 3);
+    assert(error_callback_count == 0);
 }
 
 // 4. Escaped FEND inside payload
@@ -288,8 +326,16 @@ static void test_multiple_frames(void) {
 // data={0xC0}
 static void test_escaped_fend(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xDC, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -300,6 +346,7 @@ static void test_escaped_fend(void) {
     assert(capture.frame_len == 2);
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0xC0);
+    assert(error_callback_count == 0);
 }
 
 // 5. Escaped FESC inside payload
@@ -310,8 +357,16 @@ static void test_escaped_fend(void) {
 // data={0xDB}
 static void test_escaped_fesc(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;   
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xDD, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -322,6 +377,7 @@ static void test_escaped_fesc(void) {
     assert(capture.frame_len == 2);
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0xDB);
+    assert(error_callback_count == 0);
 }
 
 // 6. Mixed escaping
@@ -332,8 +388,16 @@ static void test_escaped_fesc(void) {
 // data={0x11, 0xC0, 0x22, 0xDB, 0x33}
 static void test_mixed_escaping(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
     const uint8_t frame[] = {0xC0, 0x00, 0x11, 0xDB, 0xDC, 0x22, 0xDB, 0xDD, 0x33, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -348,6 +412,7 @@ static void test_mixed_escaping(void) {
     assert(capture.frame_data[3] == 0x22);
     assert(capture.frame_data[4] == 0xDB);
     assert(capture.frame_data[5] == 0x33);
+    assert(error_callback_count == 0);
 }
 
 // 7. Split escape sequence across buffers (critical)
@@ -361,8 +426,16 @@ static void test_mixed_escaping(void) {
 // data={0x11, 0xC0, 0x22}
 static void test_across_buffer_escaping(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
     const uint8_t frame1[] = {0xC0, 0x00, 0x11, 0xDB};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame1, sizeof(frame1));
@@ -378,6 +451,7 @@ static void test_across_buffer_escaping(void) {
     assert(capture.frame_data[1] == 0x11);
     assert(capture.frame_data[2] == 0xC0);
     assert(capture.frame_data[3] == 0x22);
+    assert(error_callback_count == 0);
 }
 
 // 8. Invalid escape sequence (robustness test)
@@ -388,8 +462,16 @@ static void test_across_buffer_escaping(void) {
 // data={0xDB, 0x99}
 static void test_invalid_escape(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0x99, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -404,6 +486,7 @@ static void test_invalid_escape(void) {
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0xDB);
     assert(capture.frame_data[2] == 0x99);
+    assert(error_callback_count == 1);
 }
 
 // 9. FEND inside frame without escaping (malformed)
@@ -443,20 +526,16 @@ static void test_fend_inside_frame_without_escaping_capture_end(void *data, pico
 }
 static void test_fend_inside_frame_without_escaping(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(
-        &decoder, 
-        &capture, 
-        capture_start, 
-        capture_data, 
-        test_fend_inside_frame_without_escaping_capture_end
-    );
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, test_fend_inside_frame_without_escaping_capture_end, test_decoder_error_callback);
 
     // C0 00 11 C0 22 C0
     const uint8_t frame[] = {0xC0, 0x00, 0x11, 0xC0, 0x22, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
     assert(capture.frame_num == 2);
+    assert(error_callback_count == 0);
 }
 
 // 10. Noise before first FEND
@@ -468,8 +547,9 @@ static void test_fend_inside_frame_without_escaping(void) {
 // data={0x44}
 static void test_noise_before_first_fend(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
 
     const uint8_t frame[] = {0x11, 0x22, 0x33, 0xC0, 0x00, 0x44, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -480,6 +560,8 @@ static void test_noise_before_first_fend(void) {
     assert(capture.frame_len == 2);
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0x44);
+    // No errors should be reported for the leading noise bytes (?)
+    assert(error_callback_count == 0);
 }
 
 // 11. Double FEND (frame boundary edge)
@@ -518,13 +600,15 @@ static void test_double_fend_capture_end(void *data, pico_kiss_proto_frame_info_
 }
 static void test_double_fend(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
     pico_kiss_proto_decoder_init(
         &decoder, 
         &capture, 
         capture_start, 
         capture_data, 
-        test_double_fend_capture_end
+        test_double_fend_capture_end,
+        test_decoder_error_callback
     );
 
     // C0 C0 00 55 C0
@@ -532,6 +616,7 @@ static void test_double_fend(void) {
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
     assert(capture.frame_num == 2);
+    assert(error_callback_count == 0);
 }
 
 // 12. Unterminated frame (stream ends)
@@ -546,8 +631,9 @@ static void test_double_fend(void) {
 // data={0x11,0x22}
 static void test_unterminated_frame(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x00, 0x11, 0x22};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -565,6 +651,7 @@ static void test_unterminated_frame(void) {
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0x11);
     assert(capture.frame_data[2] == 0x22);
+    assert(error_callback_count == 0);
 }
 
 // 13. Very important: command-only frame with escaping after
@@ -575,8 +662,9 @@ static void test_unterminated_frame(void) {
 // data={0xC0}
 static void test_command_only_frame_with_escaping(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x05, 0xDB, 0xDC, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -587,6 +675,7 @@ static void test_command_only_frame_with_escaping(void) {
     assert(capture.frame_len == 2);
     assert(capture.frame_data[0] == 0x05);
     assert(capture.frame_data[1] == 0xC0);
+    assert(error_callback_count == 0);
 }
 
 // 14. Large payload with multiple escapes
@@ -596,8 +685,9 @@ static void test_command_only_frame_with_escaping(void) {
 // data={0xC0,0xDB,0xC0,0xDB}
 static void test_large_payload_with_multiple_escapes(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end, test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xDC, 0xDB, 0xDD, 0xDB, 0xDC, 0xDB, 0xDD, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -611,6 +701,7 @@ static void test_large_payload_with_multiple_escapes(void) {
     assert(capture.frame_data[2] == 0xDB);
     assert(capture.frame_data[3] == 0xC0);
     assert(capture.frame_data[4] == 0xDB);
+    assert(error_callback_count == 0);
 }
 
 // 15. Escape immediately before FEND (edge ambiguity)
@@ -624,8 +715,15 @@ static void test_large_payload_with_multiple_escapes(void) {
 // and treat C0 as frame end.
 static void test_escape_immediately_before_fend(void) {
     decoder_capture_t capture = {0};
+    error_callback_count = 0;
     pico_kiss_proto_decoder_t decoder = {0};
-    pico_kiss_proto_decoder_init(&decoder, &capture, capture_start, capture_data, capture_end);
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data, 
+        capture_end, 
+        test_decoder_error_callback);
 
     const uint8_t frame[] = {0xC0, 0x00, 0xDB, 0xC0};
     pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
@@ -636,6 +734,7 @@ static void test_escape_immediately_before_fend(void) {
     assert(capture.frame_len == 2);
     assert(capture.frame_data[0] == 0x00);
     assert(capture.frame_data[1] == 0xDB);
+    assert(error_callback_count == 1);
 }
 
 static void run_test(const char *name, void (*fn)(void)) {
@@ -668,7 +767,7 @@ int main(void) {
     run_test("test_command_only_frame_with_escaping", test_command_only_frame_with_escaping);
     run_test("test_large_payload_with_multiple_escapes", test_large_payload_with_multiple_escapes);
     run_test("test_escape_immediately_before_fend", test_escape_immediately_before_fend);
-    
+
     printf("All tests passed.\n");
     return 0;
 }
