@@ -84,7 +84,14 @@ void pico_kiss_proto_decoder_put(
                 // If strict mode is not enabled, treat this as a literal byte
                 // (This is a leniency that can help with some malformed frames)
                 if (decoder->data_cb) {
-                    decoder->data_cb(decoder->data, PICO_KISS_PROTO_FESC, decoder->data_len);
+                    const pico_kiss_proto_decoder_data_cb_status_t status = decoder->data_cb(decoder->data, PICO_KISS_PROTO_FESC, decoder->data_len);
+                    if (status == PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_FRAME_ERROR) {
+                        if (decoder->error_cb) {
+                            decoder->error_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_CB_FRAME_ERROR, decoder->data_len);
+                        }
+                        pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
+                        return;
+                    }
                 }
                 decoder->data_len++;
             }
@@ -132,7 +139,14 @@ void pico_kiss_proto_decoder_put(
 
     // We have a data byte, pass it to the callback  
     if (decoder->data_cb) {
-        decoder->data_cb(decoder->data, byte, decoder->data_len);
+        const pico_kiss_proto_decoder_data_cb_status_t status = decoder->data_cb(decoder->data, byte, decoder->data_len);
+        if (status == PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_FRAME_ERROR) {
+            if (decoder->error_cb) {
+                decoder->error_cb(decoder->data, PICO_KISS_PROTO_DECODER_STATUS_CB_FRAME_ERROR, decoder->data_len);
+            }
+            pico_kiss_proto_decoder_reset(decoder, PICO_KISS_PROTO_DECODER_STATE_WAITING_FOR_FEND);
+            return;
+        }
     }
 
     decoder->data_len++;

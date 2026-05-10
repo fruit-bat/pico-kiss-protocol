@@ -24,7 +24,15 @@ typedef enum {
     PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE = 0,
     PICO_KISS_PROTO_DECODER_STATUS_INVALID_ESCAPE_SEQUENCE = 1,
     PICO_KISS_PROTO_DECODER_STATUS_FRAME_INCOMPLETE = 2,
+    PICO_KISS_PROTO_DECODER_STATUS_CB_FRAME_ERROR = 3,
 } pico_kiss_proto_decoder_status_t;
+
+typedef enum {
+    // If the data callback returns this status, it indicates that the decoder should continue as normal.
+    PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_OK = 0,
+    // If the data callback returns this status, it indicates that the decoder should treat this as an error condition and abort the frame.
+    PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_FRAME_ERROR = 1,
+} pico_kiss_proto_decoder_data_cb_status_t;
 
 const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status);
 
@@ -33,7 +41,7 @@ typedef struct {
     pico_kiss_proto_decoder_status_t status;
 } pico_kiss_proto_frame_info_t;
 
-typedef void (*pico_kiss_proto_decoder_data_cb_t)(
+typedef pico_kiss_proto_decoder_data_cb_status_t (*pico_kiss_proto_decoder_data_cb_t)(
     void * data, 
     uint8_t byte, 
     uint32_t byte_index);

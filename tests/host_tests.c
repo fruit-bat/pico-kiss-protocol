@@ -30,10 +30,11 @@ static void capture_start(void *data) {
     capture->len = 0;
 }
 
-static void capture_data(void *data, uint8_t byte, uint32_t byte_index) {
+static pico_kiss_proto_decoder_data_cb_status_t capture_data(void *data, uint8_t byte, uint32_t byte_index) {
     decoder_capture_t *capture = data;
     assert(byte_index == capture->len);
     capture->data[capture->len++] = byte;
+    return PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_OK;
 }
 
 static void capture_end(void *data, pico_kiss_proto_frame_info_t *info) {
@@ -802,9 +803,54 @@ static void test_escaped_escape_followed_by_invalid_escape(void) {
 // recover cleanly at next FEND
 // NOT:
 // decoder permanently poisoned
+// 
+static pico_kiss_proto_decoder_data_cb_status_t capture_data_5(void *data, uint8_t byte, uint32_t byte_index) {
+    decoder_capture_t *capture = data;
+    if (byte_index < 5) {
+        return capture_data(data, byte, byte_index);
+    } else {
+        // Buffer overflow - report error and discard frame
+        return PICO_KISS_PROTO_DECODER_DATA_CB_STATUS_FRAME_ERROR;
+    }
+}
+// Test frame overflow recovery (with max frame size of 5 for testing purposes)
+// Input
+// C0 00 01 02 03 04 05 06 07 08 09 C0 11 12 13 14 C0
+// Expected
+// data={0x11, 0x12, 0x13, 0x14}
+// Errors
+// 1
+static void test_frame_overflow_recovery(void) {
+    decoder_capture_t capture = {0};
+    error_callback_count = 0;
+    pico_kiss_proto_decoder_t decoder = {0};
+    pico_kiss_proto_decoder_init(
+        &decoder, 
+        &capture, 
+        capture_start, 
+        capture_data_5, 
+        capture_end, 
+        test_decoder_error_callback
+    );
 
-// TODO: implement this test once overflow handling is implemented.
+    const uint8_t frame[] = {
+        0xC0, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 
+        0xC0, // End of first frame (overflow)
+        0x11, 0x12, 0x13, 0x14,
+        0xC0
+    };
+    pico_kiss_proto_decoder_put_array(&decoder, (uint8_t *)frame, sizeof(frame));
 
+    assert(capture.started == 1);
+    assert(capture.ended == 1);
+    assert(capture.status == PICO_KISS_PROTO_DECODER_STATUS_FRAME_COMPLETE);
+    assert(capture.frame_len == 4);
+    assert(capture.frame_data[0] == 0x11);
+    assert(capture.frame_data[1] == 0x12);
+    assert(capture.frame_data[2] == 0x13);
+    assert(capture.frame_data[3] == 0x14);
+    assert(error_callback_count == 1); // One error for the overflow
+}
 
 static void run_test(const char *name, void (*fn)(void)) {
     printf("[ RUN ] %s\n", name);
@@ -838,7 +884,7 @@ int main(void) {
     run_test("test_escape_immediately_before_fend", test_escape_immediately_before_fend);
     run_test("test_multiple_invalid_escapes", test_multiple_invalid_escapes);
     run_test("test_escaped_escape_followed_by_invalid_escape", test_escaped_escape_followed_by_invalid_escape);
-
+    run_test("test_frame_overflow_recovery", test_frame_overflow_recovery);
 
     printf("All tests passed.\n");
     return 0;
