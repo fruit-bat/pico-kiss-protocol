@@ -36,6 +36,13 @@ typedef enum {
 
 /**
  * Convert a decoder status into a readable string.
+ *
+ * @brief Return a human-readable, NUL-terminated string describing a
+ *        {@link pico_kiss_proto_decoder_status_t} value. Useful for
+ *        logging and diagnostics.
+ *
+ * @param status Decoder status value to stringify.
+ * @return Pointer to a constant string describing the status.
  */
 const char *pico_kiss_proto_decoder_status_to_string(pico_kiss_proto_decoder_status_t status);
 
@@ -133,13 +140,22 @@ typedef struct {
 /**
  * Initialize a decoder instance.
  *
- * Parameters:
- * - decoder: decoder state object to initialize
- * - data: user-provided context pointer forwarded to callbacks
- * - start_cb: frame-start callback, may be NULL
- * - data_cb: payload byte callback, may be NULL
- * - end_cb: frame-end callback, may be NULL
- * - error_cb: error callback, may be NULL
+ * @brief Prepare a {@link pico_kiss_proto_decoder_t} for decoding KISS
+ *        frames. This zero/sets up internal state and registers the user
+ *        callback pointers and context.
+ *
+ * @param decoder Pointer to the decoder state object to initialize. Must
+ *                point to a valid, writable object.
+ * @param data User-provided opaque context pointer which will be forwarded
+ *             to callbacks registered below (may be NULL).
+ * @param start_cb Optional callback invoked when a new frame starts (may
+ *                 be NULL).
+ * @param data_cb Optional callback invoked for each decoded payload byte
+ *                (may be NULL).
+ * @param end_cb Optional callback invoked when a frame ends (may be NULL).
+ * @param error_cb Optional callback invoked on byte-level decode errors
+ *                 (may be NULL).
+ * @return This function returns no value.
  */
 void pico_kiss_proto_decoder_init(
     pico_kiss_proto_decoder_t* decoder,
@@ -152,6 +168,13 @@ void pico_kiss_proto_decoder_init(
 
 /**
  * Configure decoder flags.
+ *
+ * @brief Set behaviour flags for an initialized decoder. Flags control
+ *        runtime options such as strict escape handling.
+ *
+ * @param decoder Pointer to an initialized {@link pico_kiss_proto_decoder_t}.
+ * @param flags Bitwise-or of {@link pico_kiss_proto_decoder_flags_t} values.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_decoder_set_flags(
     pico_kiss_proto_decoder_t* decoder,
@@ -161,8 +184,13 @@ void pico_kiss_proto_decoder_set_flags(
 /**
  * Feed a single raw byte into the decoder.
  *
- * The decoder processes KISS delimiters and escape sequences, delivering
- * decoded payload bytes through the data callback.
+ * @brief Process one raw input byte. The decoder will handle frame
+ *        delimiters and escape sequences and will invoke the registered
+ *        callbacks as payload bytes are decoded.
+ *
+ * @param decoder Pointer to an initialized decoder instance.
+ * @param byte Raw input byte to process.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_decoder_put(
     pico_kiss_proto_decoder_t* decoder,
@@ -171,6 +199,14 @@ void pico_kiss_proto_decoder_put(
 
 /**
  * Feed an array of raw bytes into the decoder.
+ *
+ * @brief Convenience helper that feeds `len` bytes from `bytes` into the
+ *        decoder by repeatedly calling {@link pico_kiss_proto_decoder_put}.
+ *
+ * @param decoder Pointer to an initialized decoder instance.
+ * @param bytes Pointer to the input byte array (may be NULL if len is 0).
+ * @param len Number of bytes in the `bytes` array.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_decoder_put_array(
     pico_kiss_proto_decoder_t* decoder,
@@ -194,10 +230,14 @@ typedef struct {
 /**
  * Initialize an encoder instance.
  *
- * Parameters:
- * - encoder: encoder state object to initialize
- * - data: user-provided context pointer forwarded to byte_cb
- * - byte_cb: callback invoked for each encoded byte
+ * @brief Prepare a {@link pico_kiss_proto_encoder_t} for encoding KISS
+ *        frames. Registers the output callback and user context.
+ *
+ * @param encoder Pointer to the encoder state object to initialize.
+ * @param data User-provided opaque context pointer forwarded to `byte_cb`.
+ * @param byte_cb Callback invoked for each encoded output byte (must not
+ *                be NULL for normal operation).
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_init(
     pico_kiss_proto_encoder_t* encoder,
@@ -207,6 +247,12 @@ void pico_kiss_proto_encoder_init(
 
 /**
  * Write the frame start delimiter (FEND) to the output stream.
+ *
+ * @brief Emit the KISS frame start byte. This must be called before
+ *        encoding payload bytes for a new frame.
+ *
+ * @param encoder Pointer to an initialized encoder instance.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_start(
     pico_kiss_proto_encoder_t* encoder
@@ -215,7 +261,12 @@ void pico_kiss_proto_encoder_start(
 /**
  * Encode a single payload byte.
  *
- * The encoder escapes FEND and FESC bytes according to KISS rules.
+ * @brief Encode `byte` and emit one or more bytes via the encoder's
+ *        `byte_cb`. Special bytes (FEND/FESC) are escaped per KISS rules.
+ *
+ * @param encoder Pointer to an initialized encoder instance.
+ * @param byte Payload byte to encode.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_put(
     pico_kiss_proto_encoder_t* encoder,
@@ -224,6 +275,12 @@ void pico_kiss_proto_encoder_put(
 
 /**
  * Write the frame end delimiter (FEND) to the output stream.
+ *
+ * @brief Emit the KISS frame end byte. Call after all payload bytes have
+ *        been encoded to terminate the frame.
+ *
+ * @param encoder Pointer to an initialized encoder instance.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_end(
     pico_kiss_proto_encoder_t* encoder
@@ -231,6 +288,14 @@ void pico_kiss_proto_encoder_end(
 
 /**
  * Encode an array of payload bytes.
+ *
+ * @brief Convenience helper that encodes `len` payload bytes from `bytes`.
+ *        Each byte is processed through {@link pico_kiss_proto_encoder_put}.
+ *
+ * @param encoder Pointer to an initialized encoder instance.
+ * @param bytes Pointer to the payload byte array (may be NULL if len is 0).
+ * @param len Number of payload bytes to encode.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_put_array(
     pico_kiss_proto_encoder_t* encoder,
@@ -240,6 +305,15 @@ void pico_kiss_proto_encoder_put_array(
 
 /**
  * Encode a complete frame: start delimiter, escaped payload, then end delimiter.
+ *
+ * @brief Convenience function that emits a start delimiter, encodes the
+ *        supplied payload bytes (escaping as required), and then emits the
+ *        end delimiter.
+ *
+ * @param encoder Pointer to an initialized encoder instance.
+ * @param bytes Pointer to the payload byte array (may be NULL if len is 0).
+ * @param len Number of payload bytes to encode.
+ * @return This function returns no value.
  */
 void pico_kiss_proto_encoder_put_frame(
     pico_kiss_proto_encoder_t* encoder,
