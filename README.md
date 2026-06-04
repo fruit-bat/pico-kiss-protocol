@@ -34,7 +34,25 @@ cmake --build build && ctest --verbose --test-dir build
 This compiles `pico-kiss-protocol` as a normal host executable and runs the unit tests without Pico hardware.
 
 ## Monitor application
+The `apps/monitor` target builds a PTY proxy that sits between a real serial TTY device and a virtual pseudo-terminal.
+
+The monitor app opens the real device you provide, configures it for raw serial I/O, creates a virtual PTY, and forwards bytes in both directions. It also decodes KISS frames on both the incoming and outgoing streams and prints them to the console.
+
+Build and run:
 ```bash
 cmake -S apps/monitor -B apps/monitor/build
 cmake --build apps/monitor/build --target monitor
+./apps/monitor/build/monitor /dev/ttyUSB0 9600
 ```
+
+The program prints the virtual PTY path when it starts. Connect your KISS-capable application to that virtual device instead of the physical serial port.
+
+Example output:
+```text
+Proxy active.
+Real Device:   /dev/ttyUSB0
+Virtual TTY:   /dev/pts/42
+Connect your application to the Virtual TTY.
+```
+
+This makes it easy to inspect or log KISS traffic without changing the real device connection.

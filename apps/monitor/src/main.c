@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 fruit-bat
+
+// Enable X/Open and POSIX extensions so the GNU C library exposes
+// pseudoterminal helper APIs such as posix_openpt(), grantpt(), unlockpt(),
+// and ptsname(). This must be defined before including any system headers.
+#define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
+#include <pty.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
