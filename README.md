@@ -33,3 +33,8 @@ cmake --build build && ctest --verbose --test-dir build
 
 This compiles `pico-kiss-protocol` as a normal host executable and runs the unit tests without Pico hardware.
 
+## Monitor application
+```bash
+cmake -S apps/monitor -B apps/monitor/build
+cmake --build apps/monitor/build --target monitor
+```

@@ -1,4 +1,5 @@
-#define _XOPEN_SOURCE 600
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 fruit-bat
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
