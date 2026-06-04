@@ -172,31 +172,31 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int master_fd = posix_openpt(O_RDWR | O_NOCTTY);
-    if (master_fd < 0) {
-        perror("Error creating PTY master");
+    int virt_fd = posix_openpt(O_RDWR | O_NOCTTY);
+    if (virt_fd < 0) {
+        perror("Error creating PTY virtual device");
         close(real_fd);
         return 1;
     }
 
-    if (grantpt(master_fd) < 0 || unlockpt(master_fd) < 0) {
+    if (grantpt(virt_fd) < 0 || unlockpt(virt_fd) < 0) {
         perror("Error setting up PTY permissions");
         close(real_fd);
-        close(master_fd);
+        close(virt_fd);
         return 1;
     }
 
-    char *slave_name = ptsname(master_fd);
-    if (slave_name == NULL) {
-        perror("Error getting slave PTY name");
+    char *virt_tty_path = ptsname(virt_fd);
+    if (virt_tty_path == NULL) {
+        perror("Error getting virtual PTY name");
         close(real_fd);
-        close(master_fd);
+        close(virt_fd);
         return 1;
     }
 
     printf("Proxy active.\n");
     printf("Real Device:   %s\n", real_tty_path);
-    printf("Virtual TTY:   %s\n", slave_name);
+    printf("Virtual TTY:   %s\n", virt_tty_path);
     printf("Connect your application to the Virtual TTY.\n\n");
 
     struct monitor_context incoming_ctx = {
@@ -225,12 +225,12 @@ int main(int argc, char *argv[]) {
 
     char buffer[BUFFER_SIZE];
     fd_set read_fds;
-    int max_fd = (real_fd > master_fd) ? real_fd : master_fd;
+    int max_fd = (real_fd > virt_fd) ? real_fd : virt_fd;
 
     while (1) {
         FD_ZERO(&read_fds);
         FD_SET(real_fd, &read_fds);
-        FD_SET(master_fd, &read_fds);
+        FD_SET(virt_fd, &read_fds);
 
         int ready = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
         if (ready < 0) {
@@ -250,14 +250,14 @@ int main(int argc, char *argv[]) {
             for (ssize_t i = 0; i < bytes_read; i++) {
                 pico_kiss_proto_decoder_put(&incoming_decoder, (uint8_t)buffer[i]);
             }
-            if (write_all(master_fd, buffer, (size_t)bytes_read) < 0) {
+            if (write_all(virt_fd, buffer, (size_t)bytes_read) < 0) {
                 perror("Write error to virtual PTY");
                 break;
             }
         }
 
-        if (FD_ISSET(master_fd, &read_fds)) {
-            ssize_t bytes_read = read(master_fd, buffer, sizeof(buffer));
+        if (FD_ISSET(virt_fd, &read_fds)) {
+            ssize_t bytes_read = read(virt_fd, buffer, sizeof(buffer));
             if (bytes_read <= 0) {
                 if (bytes_read < 0) perror("Read error from virtual PTY");
                 break;
@@ -273,6 +273,6 @@ int main(int argc, char *argv[]) {
     }
 
     close(real_fd);
-    close(master_fd);
+    close(virt_fd);
     return 0;
 }
