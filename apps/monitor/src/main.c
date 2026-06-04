@@ -194,6 +194,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    int virt_tty_fd = open(virt_tty_path, O_RDWR | O_NOCTTY);
+    configure_serial(virt_tty_fd, 0);
+    close(virt_tty_fd);
+
     printf("Proxy active.\n");
     printf("Real Device:   %s\n", real_tty_path);
     printf("Virtual TTY:   %s\n", virt_tty_path);
