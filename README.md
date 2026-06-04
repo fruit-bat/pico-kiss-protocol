@@ -1,6 +1,11 @@
 # Kiss radio protocol utilities
 Just some help encoding and decoding kiss frames
 
+This repository is part of a suite:
+* [pico-serial-proxy](https://github.com/fruit-bat/pico-serial-proxy)
+* [pico-kiss-protocol](https://github.com/fruit-bat/pico-kiss-protocol)
+* [pico-rnode-protocol](https://github.com/fruit-bat/pico-rnode-protocol)
+
 ## Terminology
 | Term | Meaning | Comment |
 | -----| --------| --------| 
@@ -14,7 +19,6 @@ Just some help encoding and decoding kiss frames
 | 0xDB	| FESC	| Frame Escape |
 | 0xDC	| TFEND	| Transposed Frame End |
 | 0xDD	| TFESC	| Transposed Frame Escape |
-
 
 ## References
 https://en.wikipedia.org/wiki/KISS_(amateur_radio_protocol)<br/>

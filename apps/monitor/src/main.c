@@ -15,68 +15,21 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #include "pico-kiss-protocol.h"
 #include "pico-kiss-protocol-codes.h"
+#include "../../../../pico-serial-proxy/include/pico-serial-proxy.h"
 
 #define BUFFER_SIZE 1024
 #define MAX_FRAME_BYTES 2048
 
-static int baud_rate_to_speed(int baud, speed_t *speed) {
-    switch (baud) {
-        case 0: *speed = B0; return 0;
-        case 50: *speed = B50; return 0;
-        case 75: *speed = B75; return 0;
-        case 110: *speed = B110; return 0;
-        case 134: *speed = B134; return 0;
-        case 150: *speed = B150; return 0;
-        case 200: *speed = B200; return 0;
-        case 300: *speed = B300; return 0;
-        case 600: *speed = B600; return 0;
-        case 1200: *speed = B1200; return 0;
-        case 1800: *speed = B1800; return 0;
-        case 2400: *speed = B2400; return 0;
-        case 4800: *speed = B4800; return 0;
-        case 9600: *speed = B9600; return 0;
-        case 19200: *speed = B19200; return 0;
-        case 38400: *speed = B38400; return 0;
-        case 57600: *speed = B57600; return 0;
-        case 115200: *speed = B115200; return 0;
-        case 230400: *speed = B230400; return 0;
-        default: return -1;
-    }
-}
-
-static int configure_serial(int fd, int baud_rate) {
-    struct termios tty;
-    if (tcgetattr(fd, &tty) != 0) {
-        return -1;
-    }
-
-    // Use the POSIX helper to set raw mode on the terminal.
-    // This is equivalent to clearing canonical, echo, signal handling,
-    // and most input/output processing flags.
-    cfmakeraw(&tty);
-
-    if (baud_rate > 0) {
-        speed_t speed;
-        if (baud_rate_to_speed(baud_rate, &speed) != 0) {
-            errno = EINVAL;
-            return -1;
-        }
-        cfsetispeed(&tty, speed);
-        cfsetospeed(&tty, speed);
-    }
-
-    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
+// The serial configuration and PTY management is handled by
+// the pico-serial-proxy library. The monitor app provides a
+// callback to receive bytes forwarded in either direction.
 
 struct monitor_context {
     const char *direction;
@@ -152,6 +105,20 @@ static ssize_t write_all(int fd, const void *buffer, size_t len) {
     return (ssize_t)len;
 }
 
+static volatile sig_atomic_t monitor_stop_requested = 0;
+
+static void proxy_signal_handler(int signum) {
+    const char *signal_name = "unknown";
+    switch (signum) {
+        case SIGINT: signal_name = "SIGINT"; break;
+        case SIGTERM: signal_name = "SIGTERM"; break;
+        case SIGHUP: signal_name = "SIGHUP"; break;
+    }
+    fprintf(stderr, "Received %s, shutting down proxy...\n", signal_name);
+    monitor_stop_requested = 1;
+    pico_serial_proxy_request_stop();
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <real_tty_device> [baud_rate]\n", argv[0]);
@@ -164,75 +131,27 @@ int main(int argc, char *argv[]) {
         baud_rate = atoi(argv[2]);
     }
 
-    int real_fd = open(real_tty_path, O_RDWR | O_NOCTTY);
-    if (real_fd < 0) {
-        perror("Error opening real TTY device");
-        return 1;
-    }
+    signal(SIGINT, proxy_signal_handler);
+    signal(SIGTERM, proxy_signal_handler);
+    signal(SIGHUP, proxy_signal_handler);
 
-    if (configure_serial(real_fd, baud_rate) != 0) {
-        perror("Error configuring serial port");
-        close(real_fd);
-        return 1;
-    }
+    // The pico-serial-proxy library will open and configure the real
+    // device and create the virtual PTY; we just initialize it below.
 
-    int virt_fd = posix_openpt(O_RDWR | O_NOCTTY);
-    if (virt_fd < 0) {
-        perror("Error creating PTY virtual device");
-        close(real_fd);
-        return 1;
-    }
-
-    if (grantpt(virt_fd) < 0 || unlockpt(virt_fd) < 0) {
-        perror("Error setting up PTY permissions");
-        close(real_fd);
-        close(virt_fd);
-        return 1;
-    }
-
-    char *virt_tty_path = ptsname(virt_fd);
-    if (virt_tty_path == NULL) {
-        perror("Error getting virtual PTY name");
-        close(real_fd);
-        close(virt_fd);
-        return 1;
-    }
-
-    // Keep one copy of the slave end open so the PTY master does not receive
-    // EIO when the client disconnects. This keeps the virtual device usable
-    // across repeated client connections.
-    int virt_slave_fd = open(virt_tty_path, O_RDWR | O_NOCTTY);
-    if (virt_slave_fd < 0) {
-        perror("Error opening virtual PTY slave");
-        close(real_fd);
-        close(virt_fd);
-        return 1;
-    }
-
-    if (configure_serial(virt_slave_fd, 0) != 0) {
-        perror("Error configuring virtual PTY slave");
-        close(real_fd);
-        close(virt_fd);
-        close(virt_slave_fd);
-        return 1;
-    }
-
-    printf("Proxy active.\n");
-    printf("Real Device:   %s\n", real_tty_path);
-    printf("Virtual TTY:   %s\n", virt_tty_path);
-    printf("Connect your application to the Virtual TTY.\n\n");
-
-    struct monitor_context incoming_ctx = {
+    // prepare decoders and contexts as globals so the proxy callback
+    // can feed bytes into them.
+    static struct monitor_context incoming_ctx = {
         .direction = "IN ",
         .frame_len = 0,
     };
-    struct monitor_context outgoing_ctx = {
+    static struct monitor_context outgoing_ctx = {
         .direction = "OUT",
         .frame_len = 0,
     };
 
-    pico_kiss_proto_decoder_t incoming_decoder;
-    pico_kiss_proto_decoder_t outgoing_decoder;
+    static pico_kiss_proto_decoder_t incoming_decoder;
+    static pico_kiss_proto_decoder_t outgoing_decoder;
+
     pico_kiss_proto_decoder_init(&incoming_decoder,
                                  &incoming_ctx,
                                  decoder_start,
@@ -246,57 +165,52 @@ int main(int argc, char *argv[]) {
                                  decoder_end,
                                  decoder_error);
 
-    char buffer[BUFFER_SIZE];
-    fd_set read_fds;
-    int max_fd = (real_fd > virt_fd) ? real_fd : virt_fd;
-
-    while (1) {
-        FD_ZERO(&read_fds);
-        FD_SET(real_fd, &read_fds);
-        FD_SET(virt_fd, &read_fds);
-
-        int ready = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ready < 0) {
-            if (errno == EINTR) {
-                continue;
+    // callback invoked by the proxy when bytes are forwarded; host_to_device
+    // is true for data coming from the virtual PTY towards the real device.
+    void proxy_data_cb(void *context, bool host_to_device, const uint8_t *data, size_t len) {
+        (void)context;
+        if (host_to_device) {
+            for (size_t i = 0; i < len; i++) {
+                pico_kiss_proto_decoder_put(&outgoing_decoder, data[i]);
             }
-            perror("Select error");
-            break;
-        }
-
-        if (FD_ISSET(real_fd, &read_fds)) {
-            ssize_t bytes_read = read(real_fd, buffer, sizeof(buffer));
-            if (bytes_read <= 0) {
-                if (bytes_read < 0) perror("Read error from real device");
-                break;
-            }
-            for (ssize_t i = 0; i < bytes_read; i++) {
-                pico_kiss_proto_decoder_put(&incoming_decoder, (uint8_t)buffer[i]);
-            }
-            if (write_all(virt_fd, buffer, (size_t)bytes_read) < 0) {
-                perror("Write error to virtual PTY");
-                break;
-            }
-        }
-
-        if (FD_ISSET(virt_fd, &read_fds)) {
-            ssize_t bytes_read = read(virt_fd, buffer, sizeof(buffer));
-            if (bytes_read <= 0) {
-                if (bytes_read < 0) perror("Read error from virtual PTY");
-                break;
-            }
-            for (ssize_t i = 0; i < bytes_read; i++) {
-                pico_kiss_proto_decoder_put(&outgoing_decoder, (uint8_t)buffer[i]);
-            }
-            if (write_all(real_fd, buffer, (size_t)bytes_read) < 0) {
-                perror("Write error to real device");
-                break;
+        } else {
+            for (size_t i = 0; i < len; i++) {
+                pico_kiss_proto_decoder_put(&incoming_decoder, data[i]);
             }
         }
     }
 
-    close(real_fd);
-    close(virt_fd);
-    close(virt_slave_fd);
+    // lifecycle callback receives STARTED/ERROR/STOPPED events
+    void proxy_lifecycle_cb(void *context, pico_serial_proxy_event_t event, const char *message) {
+        (void)context;
+        switch (event) {
+            case PICO_SERIAL_PROXY_EVENT_STARTED:
+                printf("[proxy] started, virt_tty=%s\n", message ? message : "(unknown)");
+                break;
+            case PICO_SERIAL_PROXY_EVENT_ERROR:
+                printf("[proxy] error: %s\n", message ? message : "(no message)");
+                break;
+            case PICO_SERIAL_PROXY_EVENT_STOPPED:
+                printf("[proxy] stopped: %s\n", message ? message : "");
+                break;
+        }
+    }
+
+    // Initialize and run the proxy library.
+    if (pico_serial_proxy_init(real_tty_path, baud_rate, NULL, proxy_data_cb, proxy_lifecycle_cb) != 0) {
+        perror("Error initializing serial proxy");
+        return 1;
+    }
+
+    const char *virt_path = pico_serial_proxy_get_virt_tty();
+    if (virt_path) {
+        printf("Proxy active.\n");
+        printf("Real Device:   %s\n", real_tty_path);
+        printf("Virtual TTY:   %s\n", virt_path);
+        printf("Connect your application to the Virtual TTY.\n\n");
+    }
+
+    int rv = pico_serial_proxy_run();
+    (void)rv;
     return 0;
 }
