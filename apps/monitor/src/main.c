@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 fruit-bat
 
-// Enable X/Open and POSIX extensions so the GNU C library exposes
-// pseudoterminal helper APIs such as posix_openpt(), grantpt(), unlockpt(),
-// and ptsname(). This must be defined before including any system headers.
+// Enable GNU miscellaneous extensions so cfmakeraw() is declared.
+// cfmakeraw() is a glibc extension guarded by __USE_MISC.
+// _XOPEN_SOURCE 700 is also required so POSIX/X/Open PTY helpers
+// like posix_openpt(), grantpt(), unlockpt(), and ptsname() are exposed.
+#define _GNU_SOURCE
 #define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
@@ -54,14 +56,10 @@ static int configure_serial(int fd, int baud_rate) {
         return -1;
     }
 
-    tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-    tty.c_oflag &= ~OPOST;
-    tty.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-    tty.c_cflag &= ~(CSIZE | PARENB);
-    tty.c_cflag |= CS8;
-
-    tty.c_cc[VMIN] = 1;
-    tty.c_cc[VTIME] = 0;
+    // Use the POSIX helper to set raw mode on the terminal.
+    // This is equivalent to clearing canonical, echo, signal handling,
+    // and most input/output processing flags.
+    cfmakeraw(&tty);
 
     if (baud_rate > 0) {
         speed_t speed;
@@ -200,9 +198,24 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int virt_tty_fd = open(virt_tty_path, O_RDWR | O_NOCTTY);
-    configure_serial(virt_tty_fd, 0);
-    close(virt_tty_fd);
+    // Keep one copy of the slave end open so the PTY master does not receive
+    // EIO when the client disconnects. This keeps the virtual device usable
+    // across repeated client connections.
+    int virt_slave_fd = open(virt_tty_path, O_RDWR | O_NOCTTY);
+    if (virt_slave_fd < 0) {
+        perror("Error opening virtual PTY slave");
+        close(real_fd);
+        close(virt_fd);
+        return 1;
+    }
+
+    if (configure_serial(virt_slave_fd, 0) != 0) {
+        perror("Error configuring virtual PTY slave");
+        close(real_fd);
+        close(virt_fd);
+        close(virt_slave_fd);
+        return 1;
+    }
 
     printf("Proxy active.\n");
     printf("Real Device:   %s\n", real_tty_path);
@@ -284,5 +297,6 @@ int main(int argc, char *argv[]) {
 
     close(real_fd);
     close(virt_fd);
+    close(virt_slave_fd);
     return 0;
 }
