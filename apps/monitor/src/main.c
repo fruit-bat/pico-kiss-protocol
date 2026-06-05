@@ -5,8 +5,12 @@
 // cfmakeraw() is a glibc extension guarded by __USE_MISC.
 // _XOPEN_SOURCE 700 is also required so POSIX/X/Open PTY helpers
 // like posix_openpt(), grantpt(), unlockpt(), and ptsname() are exposed.
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <pty.h>
@@ -140,11 +144,11 @@ int main(int argc, char *argv[]) {
     // prepare decoders and contexts as globals so the proxy callback
     // can feed bytes into them.
     static struct monitor_context incoming_ctx = {
-        .direction = "DEV->HOST",
+        .direction = "H<-D",
         .frame_len = 0,
     };
     static struct monitor_context outgoing_ctx = {
-        .direction = "HOST->DEV",
+        .direction = "H->D",
         .frame_len = 0,
     };
 
@@ -212,6 +216,7 @@ int main(int argc, char *argv[]) {
         printf("Real Device:   %s\n", real_tty_path);
         printf("Virtual TTY:   %s\n", virt_path);
         printf("Connect your application to the Virtual TTY.\n\n");
+        printf("HOST<->DEV\n\n");
     }
 
     int rv = pico_serial_proxy_run(&monitor_proxy);

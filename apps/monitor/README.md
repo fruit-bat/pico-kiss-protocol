@@ -9,7 +9,7 @@ The app opens a real serial device, creates a virtual PTY, and prints KISS frame
 From the app directory:
 
 ```sh
-cd /home/neo/fruit-bat/pico/pico-kiss-protocol/apps/monitor
+cd apps/monitor
 mkdir -p build
 cd build
 cmake ..
