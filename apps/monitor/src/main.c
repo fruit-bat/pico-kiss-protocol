@@ -22,7 +22,7 @@
 
 #include "pico-kiss-protocol.h"
 #include "pico-kiss-protocol-codes.h"
-#include "../../../../pico-serial-proxy/include/pico-serial-proxy.h"
+#include "pico-serial-proxy.h"
 
 #define BUFFER_SIZE 1024
 #define MAX_FRAME_BYTES 2048
@@ -38,7 +38,7 @@ struct monitor_context {
 };
 
 static void print_hex_frame(const char *prefix, const uint8_t *data, size_t len) {
-    printf("%s [len=%zu]:", prefix, len);
+    printf("%s [%zu]:", prefix, len);
     for (size_t i = 0; i < len; i++) {
         printf(" %02X", data[i]);
     }
@@ -105,7 +105,7 @@ static ssize_t write_all(int fd, const void *buffer, size_t len) {
     return (ssize_t)len;
 }
 
-static volatile sig_atomic_t monitor_stop_requested = 0;
+static pico_serial_proxy_t monitor_proxy;
 
 static void proxy_signal_handler(int signum) {
     const char *signal_name = "unknown";
@@ -115,8 +115,7 @@ static void proxy_signal_handler(int signum) {
         case SIGHUP: signal_name = "SIGHUP"; break;
     }
     fprintf(stderr, "Received %s, shutting down proxy...\n", signal_name);
-    monitor_stop_requested = 1;
-    pico_serial_proxy_request_stop();
+    pico_serial_proxy_request_stop(&monitor_proxy);
 }
 
 int main(int argc, char *argv[]) {
@@ -141,11 +140,11 @@ int main(int argc, char *argv[]) {
     // prepare decoders and contexts as globals so the proxy callback
     // can feed bytes into them.
     static struct monitor_context incoming_ctx = {
-        .direction = "IN ",
+        .direction = "DEV->HOST",
         .frame_len = 0,
     };
     static struct monitor_context outgoing_ctx = {
-        .direction = "OUT",
+        .direction = "HOST->DEV",
         .frame_len = 0,
     };
 
@@ -197,12 +196,17 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize and run the proxy library.
-    if (pico_serial_proxy_init(real_tty_path, baud_rate, NULL, proxy_data_cb, proxy_lifecycle_cb) != 0) {
+    if (pico_serial_proxy_init(&monitor_proxy,
+                               real_tty_path,
+                               baud_rate,
+                               NULL,
+                               proxy_data_cb,
+                               proxy_lifecycle_cb) != 0) {
         perror("Error initializing serial proxy");
         return 1;
     }
 
-    const char *virt_path = pico_serial_proxy_get_virt_tty();
+    const char *virt_path = pico_serial_proxy_get_virt_tty(&monitor_proxy);
     if (virt_path) {
         printf("Proxy active.\n");
         printf("Real Device:   %s\n", real_tty_path);
@@ -210,7 +214,7 @@ int main(int argc, char *argv[]) {
         printf("Connect your application to the Virtual TTY.\n\n");
     }
 
-    int rv = pico_serial_proxy_run();
+    int rv = pico_serial_proxy_run(&monitor_proxy);
     (void)rv;
     return 0;
 }

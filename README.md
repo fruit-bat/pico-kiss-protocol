@@ -59,4 +59,19 @@ Virtual TTY:   /dev/pts/42
 Connect your application to the Virtual TTY.
 ```
 
+The monitor app uses the instance-based `pico_serial_proxy_t` API, so the same process can manage multiple proxy instances if needed.
+
+Example dual-proxy setup:
+```c
+pico_serial_proxy_t proxy_a;
+pico_serial_proxy_t proxy_b;
+
+pico_serial_proxy_init(&proxy_a, "/dev/ttyUSB0", 9600, ctx_a, data_cb_a, lifecycle_cb_a);
+pico_serial_proxy_init(&proxy_b, "/dev/ttyUSB1", 9600, ctx_b, data_cb_b, lifecycle_cb_b);
+```
+
+This makes it easy to run two serial-to-PTY proxies side by side in one application.
+
 This makes it easy to inspect or log KISS traffic without changing the real device connection.
+
+See `apps/monitor/README.md` for more detailed documentation, build steps, and the updated instance-based `pico_serial_proxy_t` API example.
