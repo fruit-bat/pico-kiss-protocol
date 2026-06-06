@@ -10,7 +10,7 @@ add_executable(monitor
 )
 
 target_include_directories(monitor PRIVATE
-  ../../src
+  ../../include
 )
 
 # Build and link the pico-serial-proxy helper library (sibling project)

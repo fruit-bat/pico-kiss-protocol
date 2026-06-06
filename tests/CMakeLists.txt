@@ -12,7 +12,7 @@ add_executable(host_tests
 )
 
 target_include_directories(host_tests PRIVATE
-  ../src
+  ../include
 )
 
 add_test(NAME host_tests COMMAND host_tests)

@@ -5,5 +5,5 @@ target_sources(pico_kiss_protocol INTERFACE
 )
 
 target_include_directories(pico_kiss_protocol INTERFACE
-    src
+    include
 )
