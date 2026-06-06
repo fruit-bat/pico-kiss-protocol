@@ -6,6 +6,7 @@
       "includePath": [
         "${workspaceFolder}/**",
         "${workspaceFolder}/src",
+        "${workspaceFolder}/include",
         "${workspaceFolder}/apps/monitor/src",
         "${workspaceFolder}/../pico-serial-proxy/include"
       ],
