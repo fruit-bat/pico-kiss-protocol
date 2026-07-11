@@ -29,6 +29,25 @@ This CMake target also builds the sibling `pico-serial-proxy` library from `../.
 
 After startup, the app prints the virtual PTY path. Connect your application to that virtual TTY to forward data through the proxy.
 
+### Command line options
+
+The monitor app also supports recording and replay modes:
+
+```sh
+./monitor --help
+```
+
+- `--help` shows usage information.
+- `--record <file>` records captured traffic to a file.
+- `--replay <file>` replays a saved recording through the KISS decoder.
+
+Example:
+
+```sh
+./monitor /dev/ttyUSB0 115200 --record capture.rec
+./monitor --replay capture.rec
+```
+
 ## Instance-based proxy API
 
 The app now uses the instance-based proxy API from `pico-serial-proxy`.

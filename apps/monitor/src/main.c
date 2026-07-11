@@ -27,6 +27,7 @@
 #include "pico-kiss-protocol.h"
 #include "pico-kiss-protocol-codes.h"
 #include "pico-serial-proxy.h"
+#include "pico-serial-recording.h"
 
 #define BUFFER_SIZE 1024
 #define MAX_FRAME_BYTES 2048
@@ -110,6 +111,8 @@ static ssize_t write_all(int fd, const void *buffer, size_t len) {
 }
 
 static pico_serial_proxy_t monitor_proxy;
+static pico_serial_recording_writer_t monitor_recorder = { .fd = -1, .entry_count = 0 };
+static int recording_enabled = 0;
 
 static void proxy_signal_handler(int signum) {
     const char *signal_name = "unknown";
@@ -122,27 +125,64 @@ static void proxy_signal_handler(int signum) {
     pico_serial_proxy_request_stop(&monitor_proxy);
 }
 
+static void print_help(const char *prog) {
+    printf("Usage: %s [<real_tty_device>] [baud_rate] [--record <file>] [--replay <file>]\n", prog);
+    printf("\nProxy a real serial device to a virtual PTY, record traffic, or replay a saved recording.\n");
+    printf("\nOptions:\n");
+    printf("  --record <file>  Write captured traffic to a recording file\n");
+    printf("  --replay <file>  Replay a saved recording through the decoder\n");
+    printf("  --help           Show this help text\n");
+}
+
 int main(int argc, char *argv[]) {
+    if (argc >= 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+        print_help(argv[0]);
+        return 0;
+    }
+
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <real_tty_device> [baud_rate]\n", argv[0]);
+        print_help(argv[0]);
         return 1;
     }
 
-    const char *real_tty_path = argv[1];
+    const char *real_tty_path = NULL;
     int baud_rate = 0;
-    if (argc >= 3) {
-        baud_rate = atoi(argv[2]);
+    const char *record_path = NULL;
+    const char *replay_path = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--record") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing path for --record\n");
+                return 1;
+            }
+            record_path = argv[++i];
+        } else if (strcmp(argv[i], "--replay") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing path for --replay\n");
+                return 1;
+            }
+            replay_path = argv[++i];
+        } else if (real_tty_path == NULL && argv[i][0] != '-') {
+            real_tty_path = argv[i];
+        } else if (argv[i][0] >= '0' && argv[i][0] <= '9') {
+            baud_rate = atoi(argv[i]);
+        } else {
+            fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+            return 1;
+        }
     }
 
-    signal(SIGINT, proxy_signal_handler);
-    signal(SIGTERM, proxy_signal_handler);
-    signal(SIGHUP, proxy_signal_handler);
+    if (replay_path != NULL && real_tty_path != NULL) {
+        fprintf(stderr, "--replay cannot be combined with a real serial device path\n");
+        return 1;
+    }
 
-    // The pico-serial-proxy library will open and configure the real
-    // device and create the virtual PTY; we just initialize it below.
+    if (replay_path == NULL && real_tty_path == NULL) {
+        fprintf(stderr, "Either a serial device path or --replay <file> is required\n");
+        return 1;
+    }
 
-    // prepare decoders and contexts as globals so the proxy callback
-    // can feed bytes into them.
     static struct monitor_context incoming_ctx = {
         .direction = "H<-D",
         .frame_len = 0,
@@ -161,6 +201,7 @@ int main(int argc, char *argv[]) {
                                  decoder_data,
                                  decoder_end,
                                  decoder_error);
+
     pico_kiss_proto_decoder_init(&outgoing_decoder,
                                  &outgoing_ctx,
                                  decoder_start,
@@ -168,10 +209,76 @@ int main(int argc, char *argv[]) {
                                  decoder_end,
                                  decoder_error);
 
+    if (replay_path != NULL) {
+        pico_serial_recording_reader_t replay_reader;
+        uint8_t replay_buffer[4096];
+        size_t replay_len = 0;
+        pico_serial_recording_direction_t replay_direction;
+        int replay_rc;
+
+        if (pico_serial_recording_reader_open(&replay_reader, replay_path) != 0) {
+            perror("Error opening replay file");
+            return 1;
+        }
+
+        printf("[replay] reading from %s\n", replay_path);
+
+        while ((replay_rc = pico_serial_recording_reader_read(&replay_reader,
+                                                             &replay_direction,
+                                                             replay_buffer,
+                                                             sizeof(replay_buffer),
+                                                             &replay_len)) == 0) {
+            if (replay_direction == PICO_SERIAL_RECORDING_DIRECTION_HOST_TO_DEVICE) {
+                for (size_t i = 0; i < replay_len; i++) {
+                    pico_kiss_proto_decoder_put(&outgoing_decoder, replay_buffer[i]);
+                }
+            } else {
+                for (size_t i = 0; i < replay_len; i++) {
+                    pico_kiss_proto_decoder_put(&incoming_decoder, replay_buffer[i]);
+                }
+            }
+        }
+
+        if (replay_rc < 0) {
+            fprintf(stderr, "Failed while replaying recording\n");
+            pico_serial_recording_reader_close(&replay_reader);
+            return 1;
+        }
+
+        (void)pico_serial_recording_reader_close(&replay_reader);
+        return 0;
+    }
+
+    signal(SIGINT, proxy_signal_handler);
+    signal(SIGTERM, proxy_signal_handler);
+    signal(SIGHUP, proxy_signal_handler);
+
+    // The pico-serial-proxy library will open and configure the real
+    // device and create the virtual PTY; we just initialize it below.
+
+    if (record_path != NULL) {
+        if (pico_serial_recording_writer_open(&monitor_recorder, record_path) != 0) {
+            perror("Error opening recording file");
+            return 1;
+        }
+        recording_enabled = 1;
+        printf("[recording] writing to %s\n", record_path);
+    }
+
     // callback invoked by the proxy when bytes are forwarded; host_to_device
     // is true for data coming from the virtual PTY towards the real device.
     void proxy_data_cb(void *context, bool host_to_device, const uint8_t *data, size_t len) {
         (void)context;
+        if (recording_enabled) {
+            if (pico_serial_recording_writer_write(
+                    &monitor_recorder,
+                    host_to_device ? PICO_SERIAL_RECORDING_DIRECTION_HOST_TO_DEVICE : PICO_SERIAL_RECORDING_DIRECTION_DEVICE_TO_HOST,
+                    data,
+                    len) != 0) {
+                fprintf(stderr, "Failed to write recording entry\n");
+            }
+        }
+
         if (host_to_device) {
             for (size_t i = 0; i < len; i++) {
                 pico_kiss_proto_decoder_put(&outgoing_decoder, data[i]);
@@ -221,5 +328,9 @@ int main(int argc, char *argv[]) {
 
     int rv = pico_serial_proxy_run(&monitor_proxy);
     (void)rv;
+
+    if (recording_enabled) {
+        (void)pico_serial_recording_writer_close(&monitor_recorder);
+    }
     return 0;
 }
