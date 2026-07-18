@@ -267,19 +267,24 @@ int main(int argc, char *argv[]) {
 
     // callback invoked by the proxy when bytes are forwarded; host_to_device
     // is true for data coming from the virtual PTY towards the real device.
-    void proxy_data_cb(void *context, bool host_to_device, const uint8_t *data, size_t len) {
+    void proxy_data_cb(
+        void *context, 
+        pico_serial_proxy_direction_t direction, 
+        const uint8_t *data, 
+        size_t len
+    ) {
         (void)context;
         if (recording_enabled) {
             if (pico_serial_recording_writer_write(
                     &monitor_recorder,
-                    host_to_device ? PICO_SERIAL_RECORDING_DIRECTION_HOST_TO_DEVICE : PICO_SERIAL_RECORDING_DIRECTION_DEVICE_TO_HOST,
+                    direction == PICO_SERIAL_PROXY_DIRECTION_HOST_TO_DEVICE ? PICO_SERIAL_RECORDING_DIRECTION_HOST_TO_DEVICE : PICO_SERIAL_RECORDING_DIRECTION_DEVICE_TO_HOST,
                     data,
                     len) != 0) {
                 fprintf(stderr, "Failed to write recording entry\n");
             }
         }
 
-        if (host_to_device) {
+        if (direction == PICO_SERIAL_PROXY_DIRECTION_HOST_TO_DEVICE) {
             for (size_t i = 0; i < len; i++) {
                 pico_kiss_proto_decoder_put(&outgoing_decoder, data[i]);
             }
